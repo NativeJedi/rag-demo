@@ -1,0 +1,26 @@
+{
+  "name": "chatbot",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@12.15.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "pnpm --filter @chatbot/shared build && concurrently -n shared,api,web -c gray,blue,green \"pnpm --filter @chatbot/shared dev\" \"pnpm --filter @chatbot/api dev\" \"pnpm --filter @chatbot/web dev\"",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm --filter @chatbot/shared build && pnpm -r --parallel typecheck",
+    "test": "pnpm --filter @chatbot/shared build && pnpm -r test",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "concurrently": "^10.0.7",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^16.0.0",
+    "prettier": "~3.9.10",
+    "prettier-plugin-tailwindcss": "^0.6.14",
+    "typescript": "5.9.3",
+    "typescript-eslint": "^8.72.2"
+  }
+}

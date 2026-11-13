@@ -1,0 +1,124 @@
+@import 'tailwindcss';
+@plugin '@tailwindcss/typography';
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --bg: #faf9f7;
+  --surface: #ffffff;
+  --surface-2: #f2f0ec;
+  --fg: #1f1d1a;
+  --muted: #6f6a62;
+  --line: #e4e0d9;
+  --accent: #c8623f;
+  --accent-fg: #ffffff;
+  --danger: #c0392b;
+  --success: #2f7d4f;
+  --user: #ece8e1;
+  color-scheme: light;
+}
+.dark {
+  --bg: #171615;
+  --surface: #1f1e1c;
+  --surface-2: #2a2825;
+  --fg: #ece9e4;
+  --muted: #9a958c;
+  --line: #34312d;
+  --accent: #e07b57;
+  --accent-fg: #1a1210;
+  --danger: #ef7a6c;
+  --success: #6fbf8a;
+  --user: #2b2926;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-user: var(--user);
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+/* markdown: tune typography plugin to our tokens */
+.markdown {
+  --tw-prose-body: var(--fg);
+  --tw-prose-headings: var(--fg);
+  --tw-prose-bold: var(--fg);
+  --tw-prose-links: var(--accent);
+  --tw-prose-bullets: var(--muted);
+  --tw-prose-counters: var(--muted);
+  --tw-prose-hr: var(--line);
+  --tw-prose-quotes: var(--muted);
+  --tw-prose-quote-borders: var(--line);
+  --tw-prose-th-borders: var(--line);
+  --tw-prose-td-borders: var(--line);
+  --tw-prose-code: var(--fg);
+}
+.markdown :where(code):not(:where(pre *))::before,
+.markdown :where(code):not(:where(pre *))::after {
+  content: none;
+}
+.markdown :where(code):not(:where(pre *)) {
+  background: var(--surface-2);
+  border-radius: 0.375rem;
+  padding: 0.15rem 0.35rem;
+  font-size: 0.85em;
+}
+.markdown pre {
+  background: var(--surface-2);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  margin: 0;
+}
+.markdown pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
+/* syntax highlighting (highlight.js classes) */
+.hljs-comment, .hljs-quote { color: var(--muted); font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-built_in { color: #b4457a; }
+.hljs-string, .hljs-regexp, .hljs-addition { color: #2f7d4f; }
+.hljs-number, .hljs-attr, .hljs-attribute, .hljs-variable, .hljs-template-variable { color: #b8742a; }
+.hljs-title, .hljs-section, .hljs-name, .hljs-type, .hljs-class .hljs-title { color: #3b6fb6; }
+.hljs-deletion { color: var(--danger); }
+.dark .hljs-keyword, .dark .hljs-selector-tag, .dark .hljs-literal, .dark .hljs-built_in { color: #e58bb6; }
+.dark .hljs-string, .dark .hljs-regexp, .dark .hljs-addition { color: #8ad3a3; }
+.dark .hljs-number, .dark .hljs-attr, .dark .hljs-attribute, .dark .hljs-variable { color: #e3b071; }
+.dark .hljs-title, .dark .hljs-section, .dark .hljs-name, .dark .hljs-type { color: #8cb4ec; }
+
+@keyframes caret {
+  50% { opacity: 0; }
+}
+.caret::after {
+  content: '▍';
+  margin-left: 2px;
+  color: var(--accent);
+  animation: caret 1s steps(1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .caret::after { animation: none; }
+}
