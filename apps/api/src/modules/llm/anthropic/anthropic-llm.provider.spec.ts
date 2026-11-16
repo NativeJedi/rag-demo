@@ -1,12 +1,15 @@
-import type Anthropic from '@anthropic-ai/sdk';
 import { describe, expect, it, vi } from 'vitest';
 import type { ChatEvent } from '@chatbot/shared';
+import type { AppConfig } from '../../config/config.module';
 import type { LlmMessage } from '../llm-provider';
 import { AnthropicLlmProvider } from './anthropic-llm.provider';
 
+const sdk = vi.hoisted(() => ({ stream: vi.fn() }));
+vi.mock('@anthropic-ai/sdk', () => ({ default: class { messages = { stream: sdk.stream }; } }));
+
 function setup(sdkEvents: object[]) {
-  const stream = vi.fn(() => (async function* () { yield* sdkEvents; })());
-  const provider = new AnthropicLlmProvider({ messages: { stream } } as unknown as Pick<Anthropic, 'messages'>, 'test-model');
+  const stream = sdk.stream.mockImplementation(() => (async function* () { yield* sdkEvents; })());
+  const provider = new AnthropicLlmProvider({ ANTHROPIC_API_KEY: 'test-key' } as AppConfig);
   const run = async (messages: LlmMessage[] = [{ role: 'user', content: 'hi' }]) => {
     const events: ChatEvent[] = [];
     for await (const e of provider.stream({ messages }, new AbortController().signal)) events.push(e);
@@ -40,6 +43,6 @@ describe('AnthropicLlmProvider', () => {
       { role: 'user' as const, content: 'c' },
     ];
     await run(messages);
-    expect(stream).toHaveBeenCalledWith(expect.objectContaining({ model: 'test-model', messages }), expect.anything());
+    expect(stream).toHaveBeenCalledWith(expect.objectContaining({ model: 'claude-haiku-5-5', messages }), expect.anything());
   });
 });

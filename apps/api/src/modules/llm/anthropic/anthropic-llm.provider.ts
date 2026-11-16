@@ -1,18 +1,23 @@
-import type Anthropic from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
+import { Inject, Injectable } from '@nestjs/common';
 import type { ChatEvent, StopReason } from '@chatbot/shared';
+import { APP_CONFIG, type AppConfig } from '../../config/config.module';
 import type { LlmProvider, LlmRequest } from '../llm-provider';
 
+const MODEL = 'claude-haiku-5-5';
 const MAX_TOKENS = 4096;
 
+@Injectable()
 export class AnthropicLlmProvider implements LlmProvider {
-  constructor(
-    private readonly client: Pick<Anthropic, 'messages'>,
-    private readonly model: string,
-  ) {}
+  private readonly client: Anthropic;
+
+  constructor(@Inject(APP_CONFIG) config: AppConfig) {
+    this.client = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY });
+  }
 
   async *stream(request: LlmRequest, signal: AbortSignal): AsyncGenerator<ChatEvent> {
     const stream = this.client.messages.stream(
-      { model: this.model, max_tokens: MAX_TOKENS, messages: request.messages },
+      { model: MODEL, max_tokens: MAX_TOKENS, messages: request.messages },
       { signal },
     );
     let stopReason: StopReason = 'end_turn';

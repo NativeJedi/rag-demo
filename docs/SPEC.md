@@ -88,7 +88,7 @@ interface LlmProvider {
 
 - Injected via the `LLM_PROVIDER` token. `AnthropicLlmProvider` is the only
   implementation; SDK mapping lives only inside it. It streams
-  `client.messages.stream` (fixed `max_tokens`, model constant in `llm.module.ts`) and maps
+  `client.messages.stream` (fixed `max_tokens`, model constant in `anthropic-llm.provider.ts`) and maps
   text deltas and the stop reason to `ChatEvent`s. Errors are thrown and turned into
   an `error` event by `ChatService`.
 - `LlmRequest` is our domain shape: `{ messages: { role, content }[] }`.
@@ -221,7 +221,7 @@ ANTHROPIC_API_KEY=
 
 Config is validated at boot; the app fails fast with a readable message.
 `ANTHROPIC_API_KEY` is required; `DATABASE_URL` arrives in phase 3.
-Model IDs are constants in `LlmModule`, never literals elsewhere.
+Model IDs are constants inside `modules/llm` (in `AnthropicLlmProvider`), never literals elsewhere.
 
 ## 9. Frontend (apps/web)
 
