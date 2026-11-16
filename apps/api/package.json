@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
     "@chatbot/shared": "workspace:*",
     "@nestjs/common": "^11.2.9",
     "@nestjs/core": "^11.2.9",

@@ -19,7 +19,7 @@ async function bootstrap(): Promise<void> {
   app.setGlobalPrefix('api');
   app.enableCors({ origin: config.WEB_ORIGIN });
   await app.listen(config.PORT);
-  new Logger('Bootstrap').log(`API on http://localhost:${config.PORT}/api (llm: mock)`);
+  new Logger('Bootstrap').log(`API on http://localhost:${config.PORT}/api`);
 }
 
 bootstrap().catch((err: unknown) => {

@@ -34,7 +34,8 @@ Acceptance
 - tests: shared schema round-trips, SSE parser, `chatReducer`, conversations
   controller, mock provider, chat SSE end to end
 
-## Phase 2 — Real chat ⬜
+## Phase 2 — Real chat 🟨
+_Done so far: making a request and multi-turn on `AnthropicLlmProvider` (mock removed). Rest of the scope below is pending._
 **Course:** Accessing Claude with the API — making a request, multi-turn, system prompts, temperature, streaming, structured data.
 **Goal:** talk to Claude for real.
 
