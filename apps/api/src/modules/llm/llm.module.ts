@@ -4,7 +4,7 @@ import { APP_CONFIG, type AppConfig } from '../config/config.module';
 import { AnthropicLlmProvider } from './anthropic/anthropic-llm.provider';
 import { LLM_PROVIDER } from './llm-provider';
 
-const MODEL = 'claude-sonnet-5-5';
+const MODEL = 'claude-haiku-5-5';
 
 @Module({
   providers: [

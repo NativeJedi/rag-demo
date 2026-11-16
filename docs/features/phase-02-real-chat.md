@@ -16,7 +16,7 @@ The chat talks to Claude for real, and follow-up messages see the whole conversa
 ## Design
 - Modules touched: `LlmModule` (provider + factory), config schema, `test-app.ts` (inline fake provider).
 - Contracts: none changed.
-- Config: `ANTHROPIC_API_KEY` (required) joins `PORT` and `WEB_ORIGIN` in `.env`; the model ID is a constant in `LlmModule`.
+- Config: `ANTHROPIC_API_KEY` (required) joins `PORT` and `WEB_ORIGIN` in `.env`; the model ID is a constant in `LlmModule` (default: Haiku).
 - SDK: `client.messages.stream` (https://docs.claude.com).
 
 ## Acceptance criteria
