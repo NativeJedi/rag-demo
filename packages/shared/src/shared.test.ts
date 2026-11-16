@@ -5,7 +5,7 @@ import {
   MessageSchema,
   SendMessageSchema,
   type ChatEvent,
-} from './index';
+} from './index.ts';
 
 const events: ChatEvent[] = [
   { type: 'message_start', messageId: 'msg_1' },

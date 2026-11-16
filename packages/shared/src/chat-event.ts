@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { StopReasonSchema } from './domain';
+import { StopReasonSchema } from './domain.ts';
 
 /**
  * Everything the server can say while an assistant turn is running.

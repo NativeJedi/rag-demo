@@ -1,1 +1,1 @@
-{ "extends": "./tsconfig.json", "exclude": ["node_modules", "dist", "**/*.spec.ts", "src/test-app.ts", "vitest.config.mts"] }
+{ "extends": "./tsconfig.json", "compilerOptions": { "noEmit": true }, "exclude": ["node_modules", "dist", "**/*.spec.ts", "src/test-app.ts", "vitest.config.mts"] }

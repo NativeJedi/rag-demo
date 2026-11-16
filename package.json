@@ -5,10 +5,10 @@
   "packageManager": "pnpm@12.15.0",
   "engines": { "node": ">=22" },
   "scripts": {
-    "dev": "pnpm --filter @chatbot/shared build && concurrently -n shared,api,web -c gray,blue,green \"pnpm --filter @chatbot/shared dev\" \"pnpm --filter @chatbot/api dev\" \"pnpm --filter @chatbot/web dev\"",
+    "dev": "concurrently -n api,web -c blue,green \"pnpm --filter @chatbot/api dev\" \"pnpm --filter @chatbot/web dev\"",
     "build": "pnpm -r build",
-    "typecheck": "pnpm --filter @chatbot/shared build && pnpm -r --parallel typecheck",
-    "test": "pnpm --filter @chatbot/shared build && pnpm -r test",
+    "typecheck": "pnpm -r --parallel typecheck",
+    "test": "pnpm -r test",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

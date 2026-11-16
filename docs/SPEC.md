@@ -59,7 +59,7 @@ chatbot/
 | Server state (web) | TanStack Query | REST resources |
 | Stream state (web) | `useReducer` over `ChatEvent` | single reducer, see §6 |
 | Markdown | `react-markdown` + `remark-gfm` + `rehype-highlight` | code blocks highlighted |
-| Shared pkg build | `tsup` → CJS + ESM + d.ts | web may alias to source |
+| Shared pkg | source-only (`exports` → `src/index.ts`), no build step | relative imports use `.ts` so Node 22.18+ can load it at runtime |
 | Tests | Vitest everywhere (api via `unplugin-swc`), per-package config | Testing Library + jsdom on web |
 | Lint/format | ESLint 9 flat config + Prettier at root | `no-explicit-any` is an error |
 | Storage | in-memory maps inside `ConversationsService`; SQLite via Drizzle in phase 3 | |
@@ -283,7 +283,7 @@ every event type in the union (exhaustive `switch` with `never` check).
 
 | Command | Does |
 |---|---|
-| `pnpm dev` | builds shared, then shared (watch) + api (:3000) + web (:5173) in parallel |
+| `pnpm dev` | api (:3000) + web (:5173) in parallel |
 | `pnpm build` | build all workspaces |
 | `pnpm typecheck` | `tsc --noEmit` everywhere |
 | `pnpm test` | unit tests everywhere |
