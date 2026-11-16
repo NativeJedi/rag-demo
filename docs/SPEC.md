@@ -71,7 +71,7 @@ Global prefix `/api`. Modules that exist today:
 | Module | Responsibility |
 |---|---|
 | `ConfigModule` | load `.env`, validate with zod, typed `AppConfig` |
-| `LlmModule` | `LlmProvider` interface + `MockLlmProvider` |
+| `LlmModule` | `LlmProvider` interface + `AnthropicLlmProvider` |
 | `ConversationsModule` | conversations and their messages (in memory) |
 | `ChatModule` | `ChatService`: runs one turn, emits `ChatEvent`s over SSE |
 
@@ -86,15 +86,13 @@ interface LlmProvider {
 }
 ```
 
-- Injected via the `LLM_PROVIDER` token. `MockLlmProvider` is the only
-  implementation today; `AnthropicLlmProvider` plugs in here in phase 2, and
-  mapping to/from SDK types will live only inside it.
+- Injected via the `LLM_PROVIDER` token. `AnthropicLlmProvider` is the only
+  implementation; SDK mapping lives only inside it. It streams
+  `client.messages.stream` (fixed `max_tokens`, model constant in `llm.module.ts`) and maps
+  text deltas and the stop reason to `ChatEvent`s. Errors are thrown and turned into
+  an `error` event by `ChatService`.
 - `LlmRequest` is our domain shape: `{ messages: { role, content }[] }`.
-  System prompt, temperature, max tokens and model alias arrive in phase 2.
-- `MockLlmProvider` streams a scripted reply word by word with a small delay, so
-  the UI and the transport can be built and tested without an API key.
-  `/error` as the message makes the turn fail mid-stream. The mock stays in the
-  codebase permanently for UI work and tests.
+  System prompt, temperature and per-conversation settings arrive later in phase 2.
 
 ### 4.2 ChatService turn lifecycle
 
@@ -218,11 +216,12 @@ exactly what is stored.
 ```
 PORT=3000
 WEB_ORIGIN=http://localhost:5173
+ANTHROPIC_API_KEY=
 ```
 
 Config is validated at boot; the app fails fast with a readable message.
-`ANTHROPIC_API_KEY` and the model IDs arrive in phase 2, `DATABASE_URL` in
-phase 3. Model IDs are configuration, never literals in code.
+`ANTHROPIC_API_KEY` is required; `DATABASE_URL` arrives in phase 3.
+Model IDs are constants in `LlmModule`, never literals elsewhere.
 
 ## 9. Frontend (apps/web)
 
@@ -276,7 +275,7 @@ every event type in the union (exhaustive `switch` with `never` check).
 - Only `LlmModule` imports `@anthropic-ai/sdk`.
 - Prompts live in `apps/api/prompts/*.md`, loaded at runtime, never inlined in code.
 - Every new endpoint: zod DTO, controller test, entry in §5 table.
-- Tests use `MockLlmProvider`; no network in unit tests. Live API tests are
+- Tests use the fake provider in `test-app.ts` or a stub SDK client; no network in unit tests. Live API tests are
   opt-in (`pnpm test:live`) and skipped without `ANTHROPIC_API_KEY`.
 - Before using an SDK/API feature, check current docs at https://docs.claude.com.
 

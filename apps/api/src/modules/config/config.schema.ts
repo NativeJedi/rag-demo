@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const EnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   WEB_ORIGIN: z.string().default('http://localhost:5173'),
+  ANTHROPIC_API_KEY: z.string().min(1),
 });
 
 export type AppConfig = z.infer<typeof EnvSchema>;
