@@ -3,16 +3,14 @@ import { loadConfig } from './config.schema';
 
 describe('loadConfig', () => {
   it('applies defaults with an empty env', () => {
-    const c = loadConfig({});
-    expect(c).toMatchObject({ PORT: 3000, LLM_PROVIDER: 'mock', MAX_AGENT_STEPS: 8 });
+    expect(loadConfig({})).toEqual({ PORT: 3000, WEB_ORIGIN: 'http://localhost:5173' });
   });
 
-  it('treats empty strings as unset and fails fast without a key for anthropic', () => {
-    expect(() => loadConfig({ LLM_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: '' })).toThrow(/ANTHROPIC_API_KEY/);
-    expect(loadConfig({ LLM_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'k' }).LLM_PROVIDER).toBe('anthropic');
+  it('treats empty strings as unset', () => {
+    expect(loadConfig({ PORT: '' }).PORT).toBe(3000);
   });
 
-  it('rejects an unknown provider', () => {
-    expect(() => loadConfig({ LLM_PROVIDER: 'x' })).toThrow(/LLM_PROVIDER/);
+  it('fails fast on an invalid value', () => {
+    expect(() => loadConfig({ PORT: 'nope' })).toThrow(/PORT/);
   });
 });

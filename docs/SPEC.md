@@ -3,6 +3,11 @@
 > Source of truth for architecture, contracts and conventions.
 > Agents: read this file before any change. If an implementation must deviate,
 > update this spec in the same change and explain why in the PR/summary.
+>
+> **This file describes what exists today, not what is planned.** Nothing is
+> scaffolded ahead of the phase that needs it: no empty modules, no stub
+> endpoints, no unused event types. `ROADMAP.md` holds the future; each phase
+> adds its own contracts, modules and UI when it is built.
 
 ## 1. Product
 
@@ -28,12 +33,10 @@ pnpm workspaces monorepo.
 chatbot/
 ├─ apps/
 │  ├─ api/                 NestJS backend
-│  │  ├─ prompts/          system.md and other prompt files (versioned text)
 │  │  └─ src/modules/      one Nest module per domain (see §4)
 │  └─ web/                 Vite + React + Tailwind frontend
 ├─ packages/
 │  └─ shared/              zod schemas + TS types shared by api and web
-├─ evals/                  (phase 4) datasets, graders, runner
 ├─ docs/
 │  ├─ SPEC.md              this file
 │  ├─ ROADMAP.md           phases, scope, acceptance criteria
@@ -59,258 +62,222 @@ chatbot/
 | Shared pkg build | `tsup` → CJS + ESM + d.ts | web may alias to source |
 | Tests | Vitest everywhere (api via `unplugin-swc`), per-package config | Testing Library + jsdom on web |
 | Lint/format | ESLint 9 flat config + Prettier at root | `no-explicit-any` is an error |
-| Storage | phase 1: in-memory repositories; phase 3: SQLite via Drizzle + better-sqlite3 | behind repository interfaces |
-| Embeddings | Voyage AI (phase 6) | |
-| MCP | `@modelcontextprotocol/sdk` (phase 8) | |
-
-Model IDs are configuration, never literals in code (see §8).
+| Storage | in-memory maps inside `ConversationsService`; SQLite via Drizzle in phase 3 | |
 
 ## 4. Backend architecture (apps/api)
 
-Global prefix `/api`. Modules:
+Global prefix `/api`. Modules that exist today:
 
-| Module | Responsibility | Phase it becomes real |
-|---|---|---|
-| `ConfigModule` | load `.env`, validate with zod, typed `AppConfig` | 1 |
-| `HealthModule` | `GET /health` | 1 |
-| `CapabilitiesModule` | models + feature flags for the UI | 1 |
-| `LlmModule` | `LlmProvider` interface; `MockLlmProvider`, `AnthropicLlmProvider` | 1 (mock), 2 (real) |
-| `ConversationsModule` | conversation + message repository and CRUD | 1 (memory), 3 (SQLite) |
-| `ChatModule` | `ChatService`: orchestrates a turn, agent loop, emits `ChatEvent`s | 1 (pass-through), 5 (loop) |
-| `ToolsModule` | tool registry, schemas, executors | 5 |
-| `AttachmentsModule` | uploads (images, PDF), Files API | 7 |
-| `KnowledgeModule` | documents, chunking, embeddings, BM25, hybrid search | 6 |
-| `McpModule` | MCP client manager, external servers, resources, prompts | 8 |
-| `WorkflowsModule` | router, chaining, parallel research | 9 |
+| Module | Responsibility |
+|---|---|
+| `ConfigModule` | load `.env`, validate with zod, typed `AppConfig` |
+| `HealthModule` | `GET /health` |
+| `LlmModule` | `LlmProvider` interface + `MockLlmProvider` |
+| `ConversationsModule` | conversations and their messages (in memory) |
+| `ChatModule` | `ChatService`: runs one turn, emits `ChatEvent`s over SSE |
+
+Later phases add their own modules (tools, attachments, knowledge, MCP,
+workflows) when they are built — see `ROADMAP.md`.
 
 ### 4.1 LlmProvider
 
 ```ts
 interface LlmProvider {
   stream(request: LlmRequest, signal: AbortSignal): AsyncIterable<ChatEvent>;
-  complete(request: LlmRequest): Promise<LlmResult>; // non-streaming helper (titles, graders, routing)
 }
 ```
 
-- Injected via token `LLM_PROVIDER`; chosen by env `LLM_PROVIDER=mock|anthropic`.
-- `LlmRequest` is our domain shape (messages, system, temperature, maxTokens,
-  model alias, later: tools, thinking, cache hints). Mapping to/from SDK types
-  happens only inside `AnthropicLlmProvider`.
-- `MockLlmProvider` streams scripted scenarios with small delays so the UI can be
-  built and tested without an API key. Scenario is picked by the user message:
-  - default: echoes the input inside a markdown reply (headings, list, code block)
-  - `/mock thinking` – thinking deltas, then text
-  - `/mock tools` – tool_call_start → tool_call_delta… → tool_call → tool_result → text
-  - `/mock citations` – text followed by citation events
-  - `/mock long` – ~2,000 words, to test scrolling and stop
-  - `/mock error` – emits `error` mid-stream
-  The mock stays in the codebase permanently for UI work and tests.
+- Injected via the `LLM_PROVIDER` token. `MockLlmProvider` is the only
+  implementation today; `AnthropicLlmProvider` plugs in here in phase 2, and
+  mapping to/from SDK types will live only inside it.
+- `LlmRequest` is our domain shape: `{ messages: { role, content }[] }`.
+  System prompt, temperature, max tokens and model alias arrive in phase 2.
+- `MockLlmProvider` streams a scripted reply word by word with a small delay, so
+  the UI and the transport can be built and tested without an API key.
+  `/error` as the message makes the turn fail mid-stream. The mock stays in the
+  codebase permanently for UI work and tests.
 
 ### 4.2 ChatService turn lifecycle
 
-1. Validate input, load conversation, append user message.
-2. Build `LlmRequest` (system prompt from `prompts/system.md` unless overridden).
-3. Stream from provider, forward every `ChatEvent` to the transport.
-4. On completion, persist the assistant message (all blocks) and usage.
-5. Phase 5+: if `stopReason === "tool_use"`, execute tools, append results,
-   loop (bounded by `MAX_AGENT_STEPS`, default 8).
-6. Client disconnect aborts the provider stream via `AbortSignal`; partial
-   assistant output is persisted with `stopReason: "aborted"`.
+`ChatService` has one public method, the async generator `streamReply()`. A turn
+reads top to bottom:
 
-Phase 1 notes: `ChatService.startTurn()` validates and records the user message
-before any bytes are streamed (so a missing conversation is a plain 404), then
-returns the event generator. The first user message sets a truncated placeholder
-title (LLM titles: phase 2). A mid-stream `error` event ends the stream; the
-partial text is persisted without a stop reason, the error itself is not stored.
+1. Load the conversation (throws → 404), snapshot the history, append the user
+   message. The first message sets a truncated placeholder title (LLM-generated
+   titles: phase 2).
+2. Emit `message_start` with the id the assistant message will be persisted
+   under, then forward every provider event, accumulating the text.
+3. Persist in a `finally`, so a Stop or an error still keeps whatever the model
+   managed to say.
+
+Because `@Sse` holds the headers until the first event, the throw in step 1 still
+reaches the exception filter and comes back as a JSON 404, not a stream.
+
+A mid-stream `error` event ends the turn; the partial text is persisted without a
+stop reason, the error itself is not stored. A turn that ends with neither
+`message_done` nor `error` was cut short by the client → `stopReason: "aborted"`.
 
 ## 5. HTTP API
 
 All bodies JSON unless stated. Errors: `{ error: { code, message } }` with a
-proper status. Validation failures return 400 `validation_error`, unknown ids 404 `not_found`. Endpoints not yet implemented return **501** with
-`{ error: { code: "not_implemented", message: "Planned for phase N" } }`.
+proper status. Validation failures return 400 `validation_error`, unknown ids
+404 `not_found`. A path that does not exist yet simply 404s — there are no
+placeholder routes.
 
-| Method | Path | Purpose | Phase |
-|---|---|---|---|
-| GET | `/api/health` | liveness | 1 |
-| GET | `/api/capabilities` | `{ models, features, defaults }` | 1 |
-| GET | `/api/conversations` | list (id, title, updatedAt) newest first | 1 |
-| POST | `/api/conversations` | create `{ title? }` → conversation | 1 |
-| GET | `/api/conversations/:id` | conversation with messages | 1 |
-| PATCH | `/api/conversations/:id` | `{ title?, settings? }` (settings merged) | 1 |
-| DELETE | `/api/conversations/:id` | delete → 204 | 1 |
-| POST | `/api/conversations/:id/messages` | send a message, **SSE response** (§6) | 1 (mock) |
-| POST | `/api/conversations/:id/title` | generate title (structured output) | 2 |
-| GET | `/api/tools` | registered tools (name, description, enabled); `[]` until phase 5 | 1 (empty) → 5 |
-| POST | `/api/attachments` | multipart upload → attachment id | 7 |
-| GET | `/api/attachments/:id` | metadata / content | 7 |
-| GET | `/api/knowledge/documents` | list documents | 6 |
-| POST | `/api/knowledge/documents` | upload + index | 6 |
-| DELETE | `/api/knowledge/documents/:id` | remove | 6 |
-| POST | `/api/knowledge/search` | `{ query, k }` debug search | 6 |
-| GET | `/api/mcp/servers` | configured MCP servers + status | 8 |
-| POST | `/api/mcp/servers` | add server | 8 |
-| DELETE | `/api/mcp/servers/:id` | remove server | 8 |
-| GET | `/api/mcp/resources` | for `@` mentions | 8 |
-| GET | `/api/mcp/prompts` | for `/` commands | 8 |
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/health` | liveness |
+| GET | `/api/conversations` | list (id, title, updatedAt) newest first |
+| POST | `/api/conversations` | create `{ title? }` → conversation |
+| GET | `/api/conversations/:id` | conversation with messages |
+| DELETE | `/api/conversations/:id` | delete → 204 |
+| POST | `/api/conversations/:id/messages` | send a message, **SSE response** (§6) |
 
 ### 5.1 Send message request
 
 ```jsonc
-{
-  "content": "string",                 // required, 1..32k chars
-  "attachments": ["att_..."],          // phase 7, optional
-  "options": {                          // all optional, override conversation settings
-    "model": "default" | "fast",
-    "system": "string",
-    "temperature": 0.0-1.0,
-    "maxTokens": 1-64000,
-    "thinking": { "enabled": boolean, "budgetTokens": number }   // phase 7
-  }
-}
+{ "content": "string" }   // required, 1..32k chars
 ```
 
-### 5.2 Capabilities
-
-```jsonc
-{
-  "models": [{ "alias": "default", "id": "<model id>", "label": "..." }, { "alias": "fast", ... }],
-  "defaults": { "model": "default", "temperature": 1, "maxTokens": 4096 },
-  "features": {
-    "streaming": true, "tools": false, "attachments": false, "thinking": false,
-    "citations": false, "knowledge": false, "mcp": false, "workflows": false
-  },
-  "provider": "mock" | "anthropic"
-}
-```
-
-Each phase flips its flag to `true`. The UI hides or disables controls based on
-these flags — never on hardcoded assumptions.
+Per-turn options (model, system prompt, temperature, max tokens) arrive with
+phase 2, attachments with phase 7.
 
 ## 6. Streaming contract
 
 `POST /api/conversations/:id/messages` responds with `Content-Type:
-text/event-stream`. Implemented with a raw Express response in the controller
-(Nest's `@Sse()` is GET-only). Each frame:
+text/event-stream`. Each frame:
 
 ```
 event: <ChatEvent.type>
+id: <counter Nest adds>
 data: <JSON of the ChatEvent>
 
 ```
 
-Heartbeat comment `: ping` every 15 s. The stream ends after `message_done` or
-`error`.
+The stream ends after `message_done` or `error`.
 
-The web client reads it with `fetch` + `ReadableStream` (not `EventSource`,
-which cannot POST) and aborts with `AbortController` for the Stop button.
+**Server side** — Nest's own SSE support, nothing hand-rolled:
+
+```ts
+@Sse(':id/messages', { method: RequestMethod.POST })
+@HttpCode(200)
+send(@Param('id') id, @Body() body, @SseSignal() signal): Observable<MessageEvent> {
+  return from(this.chat.streamReply(id, body, signal)).pipe(
+    map((event) => ({ type: event.type, data: event })),
+  );
+}
+```
+
+`@Sse` takes `{ method }` since Nest 11, so SSE over POST needs no `@Res()`.
+Nest writes the headers (including `X-Accel-Buffering: no`), formats the frames,
+handles backpressure and ends the response. It defers the headers until the
+first event, so a throw during setup — an unknown conversation — still becomes a
+JSON 404. `@SseSignal()` hands the handler an `AbortSignal` that aborts when the
+client disconnects; it is passed to the provider so its own request is cancelled.
+Unsubscribing closes the generator, so `ChatService`'s `finally` saves the
+partial reply either way.
+
+The signal also aborts on *normal* completion, so it cannot tell a Stop from a
+finished turn. `ChatService` decides instead by what it saw: no `message_done`
+and no `error` means the stream was cut short → `stopReason: "aborted"`.
+
+**Client side** — `fetch` + `ReadableStream` (not `EventSource`, which cannot
+POST), piped through `EventSourceParserStream` from `eventsource-parser`.
+`streamMessage()` is an async generator of validated `ChatEvent`s, so the caller
+writes `for await (const event of streamMessage(…))`; aborting its signal closes
+the connection, which the server treats as Stop.
 
 ### 6.1 ChatEvent (in `packages/shared`, zod discriminated union on `type`)
 
-| type | payload | emitted from phase |
-|---|---|---|
-| `message_start` | `messageId, model` | 1 |
-| `text_delta` | `text` | 1 |
-| `thinking_delta` | `text` | 1 (mock) / 7 |
-| `tool_call_start` | `toolUseId, name` | 1 (mock) / 5 |
-| `tool_call_delta` | `toolUseId, partialJson` | 1 (mock) / 5 |
-| `tool_call` | `toolUseId, name, input` | 1 (mock) / 5 |
-| `tool_result` | `toolUseId, output, isError` | 1 (mock) / 5 |
-| `citation` | `citedText, source: { kind, title, ref }, blockIndex` | 1 (mock) / 7 |
-| `usage` | `inputTokens, outputTokens, cacheReadTokens?, cacheWriteTokens?` | 1 |
-| `message_done` | `stopReason` (`end_turn` \| `max_tokens` \| `tool_use` \| `stop_sequence` \| `aborted`) | 1 |
-| `error` | `code, message, retryable` | 1 |
+| type | payload |
+|---|---|
+| `message_start` | `messageId` |
+| `text_delta` | `text` |
+| `message_done` | `stopReason` (`end_turn` \| `max_tokens` \| `aborted`) |
+| `error` | `code, message` |
 
-Adding a new event type = change the union in `shared`, the mock, the provider
-mapping and the web reducer in one change.
+Adding an event type is a deliberate, four-place change: the union in `shared`,
+the mock provider, the real provider's mapping and the web `chatReducer` — in
+one commit. Later phases each bring their own: `usage` (2), `tool_call*` and
+`tool_result` (5), `thinking_delta` (7), `citation` (7).
 
 ## 7. Data model (domain, storage-agnostic)
 
 ```ts
-Conversation { id, title, createdAt, updatedAt, settings: ConversationSettings }
-ConversationSettings { model, system?, temperature, maxTokens, thinking? }
-Message { id, conversationId, role: "user" | "assistant", blocks: Block[], model?, usage?, stopReason?, createdAt }
-Block =
-  | { type: "text", text, citations?: Citation[] }
-  | { type: "thinking", text, signature? }
-  | { type: "tool_call", toolUseId, name, input }
-  | { type: "tool_result", toolUseId, output, isError }
-  | { type: "attachment", attachmentId, kind: "image" | "pdf" }
+Conversation { id, title, createdAt, updatedAt }
+Message { id, conversationId, role: "user" | "assistant", content: string, stopReason?, createdAt }
 ```
 
-IDs: prefixed ULIDs (`conv_`, `msg_`, `att_`, `doc_`). Target layout: tool results
-are stored as blocks of the following user turn, mirroring the Messages API
-structure. **Phase 1 deviation:** the mock emits `tool_call` and `tool_result`
-in one stream, so both are stored as blocks of the single assistant message; the
-split arrives with the agent loop (phase 5).
-Thinking blocks are stored with their signature so they can be sent back.
+IDs are prefixed ULIDs (`conv_`, `msg_`).
+
+Message content is plain text. The Messages API is block-based, and this model
+will grow into `blocks: Block[]` when the first non-text block appears — tool
+calls in phase 5, thinking and attachments in phase 7. Until then a string says
+exactly what is stored.
 
 ## 8. Configuration (.env)
 
 ```
 PORT=3000
 WEB_ORIGIN=http://localhost:5173
-LLM_PROVIDER=mock                 # mock | anthropic
-ANTHROPIC_API_KEY=                # required when LLM_PROVIDER=anthropic
-MODEL_DEFAULT=claude-sonnet-5-5   # verify current IDs at docs.claude.com
-MODEL_FAST=claude-haiku-5-5
-MAX_AGENT_STEPS=8
-VOYAGE_API_KEY=                   # phase 6
-DATABASE_URL=file:./data/app.db   # phase 3
 ```
 
 Config is validated at boot; the app fails fast with a readable message.
+`ANTHROPIC_API_KEY` and the model IDs arrive in phase 2, `DATABASE_URL` in
+phase 3. Model IDs are configuration, never literals in code.
 
 ## 9. Frontend (apps/web)
 
 ### 9.1 Layout
 
-- **Sidebar**: new chat button, conversation list (rename, delete), collapsible on mobile.
-- **Header**: conversation title, model selector, settings button, usage badge.
-- **Message list**: user/assistant bubbles; assistant markdown; auto-scroll that
-  pauses when the user scrolls up; "jump to latest" button.
-- **Assistant message parts** (rendered from blocks/events):
-  - text with inline citation chips → popover with cited text and source
-  - collapsible "Thinking" panel
-  - tool call cards: name, streamed input (pretty JSON), result, error state
-  - footer: stop reason, token usage (incl. cache tokens when present)
-- **Composer**: autosizing textarea, Enter to send / Shift+Enter newline, Stop
-  while streaming, attach button (disabled unless `features.attachments`),
-  placeholder hooks for `@` mentions and `/` commands (disabled unless `features.mcp`).
-- **Settings drawer**: system prompt, temperature, max tokens, thinking toggle
-  and budget (disabled unless `features.thinking`), per conversation.
-- Empty state with sample prompts including the `/mock …` scenarios when
-  `provider === "mock"`.
-- Light/dark theme following system preference, with a manual toggle.
+A demo UI: every pixel on screen is part of the chat flow. No theme switcher, no
+collapsible panels, no modals, no routing — those hide the thing being
+demonstrated. Two columns, always visible.
+
+- **Sidebar** (fixed, 16rem): new chat button, conversation list, `✕` to delete
+  (no confirmation — it is a demo).
+- **Header**: conversation title.
+- **Message list**: user bubbles right, assistant markdown left; scrolls to the
+  bottom on every render so a streaming reply stays in view; "Stopped by you"
+  under an interrupted reply; the error banner next to the partial text.
+- **Composer**: textarea, Enter to send / Shift+Enter newline, one button that is
+  Send or Stop.
+- Empty state: two sample prompts that send on click (the default reply and `/error`).
+
+Model selection, settings and the token usage badge come back in phase 2, with
+the API that makes them mean something.
 
 ### 9.2 Structure
 
 ```
 src/
-├─ api/          typed REST client, SSE reader (parseSse), query keys
+├─ api/          typed REST client, streamMessage() SSE generator, query keys
 ├─ features/
 │  ├─ chat/      chatReducer (ChatEvent → message state), useChatStream, components
-│  ├─ conversations/
-│  └─ settings/
-├─ components/   generic UI primitives (Button, Drawer, Popover, Spinner…)
-└─ lib/
+│  └─ conversations/
+└─ lib/cn.ts     className joiner
 ```
 
-The selected conversation lives in the URL hash (`#/c/<id>`); the app always keeps a
-valid selection (newest chat, or a freshly created one). `ChatView` is keyed by
-conversation id, so switching chats aborts any in-flight stream (the partial reply
-is saved server-side). Stop reads: abort the fetch → server persists the partial
-reply → client refetches until it appears.
+The selected conversation is `useState` in `App` (no router): it falls back to
+the newest chat, and the first load creates one so the demo opens ready to type.
+
+`ChatView` is keyed by conversation id, so switching chats unmounts
+`useChatStream` and aborts any in-flight stream (the partial reply is saved
+server-side). Stop reads: abort the fetch → server persists the partial reply →
+client refetches until it appears.
 
 `chatReducer` is the only place that interprets `ChatEvent`s; it must handle
 every event type in the union (exhaustive `switch` with `never` check).
 
 ## 10. Conventions
 
+- **Build only what the current phase needs.** No empty modules, stub endpoints,
+  unused schema fields or dead UI branches for later phases. The roadmap is the
+  plan; the code is what works.
 - Shared contracts live in `packages/shared`; never duplicate a schema.
 - Only `LlmModule` imports `@anthropic-ai/sdk`.
 - Prompts live in `apps/api/prompts/*.md`, loaded at runtime, never inlined in code.
 - Every new endpoint: zod DTO, controller test, entry in §5 table.
-- Unimplemented-but-planned code paths return 501, never silently succeed.
 - Tests use `MockLlmProvider`; no network in unit tests. Live API tests are
   opt-in (`pnpm test:live`) and skipped without `ANTHROPIC_API_KEY`.
 - Before using an SDK/API feature, check current docs at https://docs.claude.com.

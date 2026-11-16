@@ -1,20 +1,17 @@
+import { EventSourceParserStream } from 'eventsource-parser/stream';
 import { z } from 'zod';
 import {
   ApiErrorSchema,
-  CapabilitiesSchema,
   ChatEventSchema,
   ConversationSchema,
   ConversationSummarySchema,
   ConversationWithMessagesSchema,
-  type Capabilities,
   type ChatEvent,
   type Conversation,
   type ConversationSummary,
   type ConversationWithMessages,
   type SendMessageDto,
-  type UpdateConversationDto,
 } from '@chatbot/shared';
-import { createSseParser } from './sse';
 
 export class ApiRequestError extends Error {
   constructor(
@@ -44,14 +41,11 @@ async function request<S extends z.ZodType>(path: string, schema: S, init?: Requ
 }
 
 export const api = {
-  capabilities: (): Promise<Capabilities> => request('/capabilities', CapabilitiesSchema),
   listConversations: (): Promise<ConversationSummary[]> => request('/conversations', z.array(ConversationSummarySchema)),
   getConversation: (id: string): Promise<ConversationWithMessages> =>
     request(`/conversations/${id}`, ConversationWithMessagesSchema),
-  createConversation: (title?: string): Promise<Conversation> =>
-    request('/conversations', ConversationSchema, { method: 'POST', body: JSON.stringify({ title }) }),
-  updateConversation: (id: string, patch: UpdateConversationDto): Promise<Conversation> =>
-    request(`/conversations/${id}`, ConversationSchema, { method: 'PATCH', body: JSON.stringify(patch) }),
+  createConversation: (): Promise<Conversation> =>
+    request('/conversations', ConversationSchema, { method: 'POST', body: '{}' }),
   deleteConversation: async (id: string): Promise<void> => {
     const res = await fetch(`/api/conversations/${id}`, { method: 'DELETE' });
     if (!res.ok) throw await toError(res);
@@ -59,16 +53,15 @@ export const api = {
 };
 
 /**
- * POST a message and read the SSE response with fetch + ReadableStream
- * (EventSource cannot POST). Aborting `signal` closes the connection, which the
- * server treats as Stop. Resolves when the stream ends; rejects on HTTP/network errors.
+ * POSTs a message and yields the assistant turn's events.
+ * `fetch` + `ReadableStream` rather than `EventSource`, which cannot POST;
+ * aborting `signal` closes the connection, which the server treats as Stop.
  */
-export async function streamMessage(
+export async function* streamMessage(
   conversationId: string,
   body: SendMessageDto,
   signal: AbortSignal,
-  onEvent: (event: ChatEvent) => void,
-): Promise<void> {
+): AsyncGenerator<ChatEvent> {
   const res = await fetch(`/api/conversations/${conversationId}/messages`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
@@ -78,17 +71,22 @@ export async function streamMessage(
   if (!res.ok) throw await toError(res);
   if (!res.body) throw new ApiRequestError('Empty response body', res.status, 'no_body');
 
-  const parser = createSseParser((frame) => {
-    const parsed = ChatEventSchema.safeParse(safeJson(frame.data));
-    if (parsed.success) onEvent(parsed.data);
-    else console.warn('Ignoring malformed ChatEvent', frame.event, parsed.error.message);
-  });
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    parser.push(decoder.decode(value, { stream: true }));
+  const reader = res.body
+    .pipeThrough(new TextDecoderStream())
+    .pipeThrough(new EventSourceParserStream())
+    .getReader();
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      const parsed = ChatEventSchema.safeParse(safeJson(value.data));
+      if (parsed.success) yield parsed.data;
+      else console.warn('Ignoring malformed ChatEvent', value.event, parsed.error.message);
+    }
+  } finally {
+    // closes the connection if the caller stops reading early
+    await reader.cancel().catch(() => undefined);
   }
 }
 

@@ -1,15 +1,38 @@
 import type { ChatEvent } from '@chatbot/shared';
-import type { LlmProvider, LlmRequest, LlmResult } from '../llm-provider';
-import { pickScenario } from './scenarios';
+import type { LlmProvider, LlmRequest } from '../llm-provider';
 
-function lastUserText(request: LlmRequest): string {
-  for (let i = request.messages.length - 1; i >= 0; i--) {
-    const message = request.messages[i];
-    if (message?.role !== 'user') continue;
-    const text = message.blocks.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('\n');
-    if (text) return text;
+/**
+ * Scripted provider for UI work and tests: no network, no API key.
+ * It echoes the last user message word by word; `/error` makes the turn fail mid-stream.
+ */
+export class MockLlmProvider implements LlmProvider {
+  /** Slow enough that streaming is visible and the Stop button is reachable. */
+  constructor(private readonly delayMs = 60) {}
+
+  async *stream(request: LlmRequest, signal: AbortSignal): AsyncGenerator<ChatEvent> {
+    const input = request.messages.at(-1)?.content ?? '';
+    const reply = input.startsWith('/error') ? 'Starting to answer, then failing…' : replyTo(input);
+
+    for (const word of reply.split(/(?<=\s)/)) {
+      await sleep(this.delayMs, signal);
+      if (signal.aborted) return; // ends silently; ChatService records the abort
+      yield { type: 'text_delta', text: word };
+    }
+
+    yield input.startsWith('/error')
+      ? { type: 'error', code: 'provider_error', message: 'Mock failure' }
+      : { type: 'message_done', stopReason: 'end_turn' };
   }
-  return '';
+}
+
+function replyTo(input: string): string {
+  return [
+    `You said: **${input.slice(0, 200)}**`,
+    '',
+    'This is the mock provider, so the answer is scripted. It streams one word at a time, which is enough to see the SSE transport, the reducer and the Stop button work.',
+    '',
+    'Send `/error` to see the error path.',
+  ].join('\n');
 }
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
@@ -23,23 +46,4 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
     const timer = setTimeout(done, ms);
     signal.addEventListener('abort', done, { once: true });
   });
-}
-
-/** Scripted provider for UI work and tests: no network, no API key. */
-export class MockLlmProvider implements LlmProvider {
-  constructor(private readonly delayMs = 20) {}
-
-  async *stream(request: LlmRequest, signal: AbortSignal): AsyncGenerator<ChatEvent> {
-    const events = pickScenario(lastUserText(request))({ input: lastUserText(request), modelId: request.modelId });
-    for (const event of events) {
-      await sleep(event.type === 'message_start' ? this.delayMs * 3 : this.delayMs, signal);
-      if (signal.aborted) return; // ends silently; ChatService records the abort
-      yield event;
-    }
-  }
-
-  async complete(request: LlmRequest): Promise<LlmResult> {
-    const text = `Mock completion for: ${lastUserText(request).slice(0, 60)}`;
-    return { text, usage: { inputTokens: 10, outputTokens: 8 }, stopReason: 'end_turn' };
-  }
 }

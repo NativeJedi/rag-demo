@@ -10,35 +10,42 @@ Status legend: ⬜ not started · 🟨 in progress · ✅ done
 
 ---
 
-## Phase 1 — Skeleton ✅
+> **Build only what the phase needs.** Nothing is scaffolded in advance: no empty
+> modules, no 501 stubs, no unused event types or schema fields. Each phase adds
+> its own contracts, modules and UI, and updates SPEC.md in the same change.
+
+## Phase 1 — Streaming chat skeleton ✅
 **Course:** none (infrastructure).
-**Goal:** a complete, polished UI and the full API surface running on the mock provider.
+**Goal:** the smallest end-to-end chat that really streams, on a mock provider.
 
 Scope
 - pnpm monorepo, root tooling (TS, ESLint, Prettier, Vitest), `.env.example`
-- `packages/shared`: all schemas from SPEC §5–7 (`ChatEvent`, DTOs, `Capabilities`, domain types)
-- `apps/api`: all modules from SPEC §4 scaffolded; endpoints from SPEC §5 registered;
-  phase-1 endpoints working with in-memory repositories; later endpoints return 501
-- `MockLlmProvider` with all scenarios; `AnthropicLlmProvider` stub that throws "phase 2"
-- SSE transport with heartbeat and abort on disconnect
-- `apps/web`: full layout from SPEC §9 rendering every `ChatEvent` type via mock
+- `packages/shared`: `ChatEvent` (message_start, text_delta, message_done, error),
+  `Conversation`, `Message` (plain text), send/create DTOs
+- `apps/api`: Config, Health, Llm (mock only), Conversations (in-memory maps), Chat
+- SSE transport over Nest's `@Sse` (POST) with abort on disconnect
+- `apps/web`: sidebar, message list with markdown and auto-scroll, composer with Stop
 
 Acceptance
 - `pnpm dev` starts api (:3000) and web (:5173) with no API key
-- every `/mock …` scenario renders correctly; Stop aborts and the partial reply stays
-- conversations: create, switch, rename, delete (in memory)
-- 501 endpoints respond with the planned phase
-- tests: shared schema round-trips, SSE parser, `chatReducer` (all event types),
-  conversations controller, mock provider scenarios
+- a message streams in word by word; Stop aborts and the partial reply stays
+- `/error` surfaces an error without losing the partial text
+- conversations: create, switch, delete (in memory)
+- tests: shared schema round-trips, SSE parser, `chatReducer`, conversations
+  controller, mock provider, chat SSE end to end
 
 ## Phase 2 — Real chat ⬜
 **Course:** Accessing Claude with the API — making a request, multi-turn, system prompts, temperature, streaming, structured data.
 **Goal:** talk to Claude for real.
 
 Scope
-- `AnthropicLlmProvider.stream` / `.complete` with mapping SDK ⇄ domain
-- multi-turn history, system prompt from file or per-conversation override, temperature, max tokens, model alias
-- usage events from the real stream
+- `AnthropicLlmProvider.stream` / `.complete` with mapping SDK ⇄ domain;
+  env back: `LLM_PROVIDER`, `ANTHROPIC_API_KEY`, `MODEL_DEFAULT`, `MODEL_FAST`
+- `prompts/system.md` + loader; per-conversation settings (model alias, system,
+  temperature, max tokens) and `PATCH /conversations/:id`
+- `usage` event + `retryable` on `error`; token badge and message footer in the UI
+- `GET /capabilities` (models, defaults, provider) so the UI stops assuming;
+  model selector and settings drawer
 - auto title after the first exchange via structured output (fast model), `POST /conversations/:id/title`
 - error mapping (rate limit, overloaded, invalid request) → `error` event with `retryable`
 
@@ -52,10 +59,11 @@ Acceptance
 **Course:** none (engineering).
 **Goal:** conversations survive restarts.
 
-Scope: Drizzle + better-sqlite3, migrations, SQLite repositories implementing the
-existing interfaces, partial message persistence on abort.
+Scope: Drizzle + better-sqlite3, migrations, a repository seam extracted from
+`ConversationsService` with a SQLite implementation, partial message persistence
+on abort.
 
-Acceptance: restart keeps all conversations and blocks; repository tests run on an in-memory SQLite.
+Acceptance: restart keeps all conversations and messages; repository tests run on an in-memory SQLite.
 
 ## Phase 4 — Evals & prompt engineering ⬜
 **Course:** Prompt evaluation; Prompt engineering techniques.
@@ -74,7 +82,9 @@ Acceptance: `pnpm eval` runs end to end; at least one prompt revision with a doc
 **Goal:** the assistant can act.
 
 Scope
-- `ToolsModule` registry: zod schema → JSON schema, executor, enable/disable
+- `Message.content` grows into `blocks: Block[]` (text + tool_call + tool_result),
+  across shared, `ChatService`, the web reducer and the message list in one change
+- `ToolsModule` registry (`GET /tools`): zod schema → JSON schema, executor, enable/disable
 - agent loop in `ChatService` (SPEC §4.2), bounded steps, parallel tool calls in one turn
 - tools: current datetime, add duration to date, reminders (create/list), batch tool
 - server tools: web search; text editor tool over a sandboxed `data/notes/` dir

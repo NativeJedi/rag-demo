@@ -18,13 +18,13 @@ React + Tailwind web, shared zod contracts.
    reality changed, flip the capability flag, summarize what changed and how to try it.
 
 ## Hard rules
+- Build only what the current phase needs. No empty modules, stub endpoints,
+  unused schema fields or dead UI branches for later phases. Delete, don't park.
 - Contracts live only in packages/shared. Changing ChatEvent means updating
   shared, MockLlmProvider, AnthropicLlmProvider mapping and the web chatReducer together.
 - Only LlmModule imports @anthropic-ai/sdk. Model IDs only from config.
 - Prompts live in apps/api/prompts/*.md, never inline.
-- Planned-but-unbuilt paths return 501 with the phase number.
 - Unit tests never hit the network; use MockLlmProvider.
-- UI decides what to show from GET /api/capabilities, not hardcoded flags.
 - No `any`. Prefer small, readable code over abstractions not needed yet.
 - Check https://docs.claude.com before using an SDK/API feature; SDK names
   change between versions.

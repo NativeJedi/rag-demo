@@ -12,9 +12,9 @@ describe('conversations API', () => {
   });
   afterAll(() => app.close());
 
-  it('creates with defaults and a title', async () => {
+  it('creates with a default title', async () => {
     const res = await http().post('/api/conversations').send({}).expect(201);
-    expect(res.body).toMatchObject({ title: 'New chat', settings: { model: 'default', temperature: 1, maxTokens: 4096 } });
+    expect(res.body).toMatchObject({ title: 'New chat' });
     expect(res.body.id).toMatch(/^conv_/);
   });
 
@@ -24,17 +24,7 @@ describe('conversations API', () => {
     const b = (await http().post('/api/conversations').send({ title: 'B' })).body;
     const list = (await http().get('/api/conversations').expect(200)).body as { id: string }[];
     expect(list.findIndex((c) => c.id === b.id)).toBeLessThan(list.findIndex((c) => c.id === a.id));
-    const one = await http().get(`/api/conversations/${a.id}`).expect(200);
-    expect(one.body).toMatchObject({ id: a.id, messages: [] });
-  });
-
-  it('renames and merges settings', async () => {
-    const c = (await http().post('/api/conversations').send({})).body;
-    const res = await http()
-      .patch(`/api/conversations/${c.id}`)
-      .send({ title: 'Renamed', settings: { temperature: 0.2 } })
-      .expect(200);
-    expect(res.body).toMatchObject({ title: 'Renamed', settings: { temperature: 0.2, maxTokens: 4096, model: 'default' } });
+    expect((await http().get(`/api/conversations/${a.id}`).expect(200)).body).toMatchObject({ id: a.id, messages: [] });
   });
 
   it('deletes, then 404s with the error shape', async () => {
@@ -46,8 +36,7 @@ describe('conversations API', () => {
   });
 
   it('validates input with a 400 error body', async () => {
-    const c = (await http().post('/api/conversations').send({})).body;
-    const res = await http().patch(`/api/conversations/${c.id}`).send({ settings: { temperature: 5 } }).expect(400);
+    const res = await http().post('/api/conversations').send({ title: '' }).expect(400);
     expect(res.body.error.code).toBe('validation_error');
   });
 });

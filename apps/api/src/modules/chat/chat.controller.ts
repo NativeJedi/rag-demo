@@ -1,54 +1,31 @@
-import { Body, Controller, Param, Post, Req, Res } from '@nestjs/common';
-import type { Request, Response } from 'express';
-import { NotImplementedPhase } from '../../common/not-implemented';
+import { Body, Controller, HttpCode, type MessageEvent, Param, RequestMethod, Sse, SseSignal } from '@nestjs/common';
+import { from, map, type Observable } from 'rxjs';
+import { createZodDto } from 'nestjs-zod';
+import { SendMessageSchema } from '@chatbot/shared';
 import { ChatService } from './chat.service';
-import { SendMessageBody } from './dto';
-import { formatFrame, startHeartbeat } from './sse';
+
+class SendMessageBody extends createZodDto(SendMessageSchema) {}
 
 @Controller('conversations')
 export class ChatController {
   constructor(private readonly chat: ChatService) {}
 
-  /** SSE over a raw Express response (Nest's @Sse() is GET-only). */
-  @Post(':id/messages')
-  async send(
+  /**
+   * Streams the assistant turn as Server-Sent Events. Nest owns the transport:
+   * headers, framing (`event:` + `data:`), backpressure and ending the response.
+   * It holds the headers until the first event, so a throw inside the generator
+   * still becomes a JSON error. Unsubscribing on a client disconnect closes the
+   * generator, so `ChatService` still saves the partial reply.
+   */
+  @Sse(':id/messages', { method: RequestMethod.POST })
+  @HttpCode(200)
+  send(
     @Param('id') id: string,
     @Body() body: SendMessageBody,
-    @Req() _req: Request,
-    @Res() res: Response,
-  ): Promise<void> {
-    const abort = new AbortController();
-    // client disconnect (or the Stop button aborting fetch) before we finished → abort the provider
-    res.on('close', () => {
-      if (!res.writableEnded) abort.abort();
-    });
-
-    const events = await this.chat.startTurn(id, body, abort.signal);
-
-    res.status(200).set({
-      'Content-Type': 'text/event-stream; charset=utf-8',
-      'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    });
-    res.flushHeaders();
-    const stopHeartbeat = startHeartbeat(res);
-    try {
-      for await (const event of events) {
-        if (abort.signal.aborted) break;
-        res.write(formatFrame(event));
-        if (event.type === 'message_done' || event.type === 'error') break;
-      }
-    } finally {
-      stopHeartbeat();
-      // drain so ChatService can persist partial output after an abort
-      await events.return(undefined);
-      res.end();
-    }
-  }
-
-  @Post(':id/title')
-  title(): never {
-    throw new NotImplementedPhase(2);
+    @SseSignal() signal: AbortSignal,
+  ): Observable<MessageEvent> {
+    return from(this.chat.streamReply(id, body, signal)).pipe(
+      map((event) => ({ type: event.type, data: event })),
+    );
   }
 }

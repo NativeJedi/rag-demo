@@ -1,6 +1,6 @@
 import { ulid } from 'ulid';
-import { ID_PREFIXES } from '@chatbot/shared';
 
-export function newId(kind: keyof typeof ID_PREFIXES): string {
-  return `${ID_PREFIXES[kind]}_${ulid()}`;
+/** Prefixed IDs so a stray id is readable in logs: `conv_01J…`, `msg_01J…`. */
+export function newId(prefix: 'conv' | 'msg'): string {
+  return `${prefix}_${ulid()}`;
 }

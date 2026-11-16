@@ -1,64 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { Block, ChatEvent, Message, SendMessageDto, StopReason, Usage } from '@chatbot/shared';
+import type { ChatEvent, SendMessageDto, StopReason } from '@chatbot/shared';
 import { newId } from '../../common/ids';
-import { CapabilitiesService } from '../capabilities/capabilities.service';
 import { ConversationsService, DEFAULT_TITLE } from '../conversations/conversations.service';
-import { LLM_PROVIDER, type LlmProvider, type LlmRequest } from '../llm/llm-provider';
-import { loadPrompt } from './prompt-loader';
-
-/** Folds ChatEvents into the blocks that get persisted (server-side mirror of the web reducer). */
-class AssistantAccumulator {
-  readonly blocks: Block[] = [];
-  usage: Usage | undefined;
-  stopReason: StopReason | undefined;
-  model: string | undefined;
-
-  apply(event: ChatEvent): void {
-    switch (event.type) {
-      case 'message_start':
-        this.model = event.model;
-        break;
-      case 'text_delta':
-      case 'thinking_delta': {
-        const type = event.type === 'text_delta' ? 'text' : 'thinking';
-        const last = this.blocks.at(-1);
-        if (last?.type === type) last.text += event.text;
-        else this.blocks.push({ type, text: event.text });
-        break;
-      }
-      case 'tool_call':
-        this.blocks.push({ type: 'tool_call', toolUseId: event.toolUseId, name: event.name, input: event.input });
-        break;
-      case 'tool_result':
-        this.blocks.push({ type: 'tool_result', toolUseId: event.toolUseId, output: event.output, isError: event.isError });
-        break;
-      case 'citation': {
-        const textBlock = [...this.blocks].reverse().find((b) => b.type === 'text');
-        if (textBlock?.type === 'text') {
-          const { citedText, source, blockIndex } = event;
-          textBlock.citations = [...(textBlock.citations ?? []), { citedText, source, blockIndex }];
-        }
-        break;
-      }
-      case 'usage': {
-        const { type: _type, ...usage } = event;
-        this.usage = usage;
-        break;
-      }
-      case 'message_done':
-        this.stopReason = event.stopReason;
-        break;
-      case 'tool_call_start':
-      case 'tool_call_delta':
-      case 'error':
-        break;
-      default: {
-        const _exhaustive: never = event;
-        return _exhaustive;
-      }
-    }
-  }
-}
+import { LLM_PROVIDER, type LlmProvider } from '../llm/llm-provider';
 
 @Injectable()
 export class ChatService {
@@ -66,74 +10,64 @@ export class ChatService {
 
   constructor(
     private readonly conversations: ConversationsService,
-    private readonly capabilities: CapabilitiesService,
     @Inject(LLM_PROVIDER) private readonly llm: LlmProvider,
   ) {}
 
-  /**
-   * Validates and records the user message, then returns the event stream for the turn.
-   * Throws (→ 404) before any bytes are streamed if the conversation does not exist.
-   */
-  async startTurn(conversationId: string, dto: SendMessageDto, signal: AbortSignal): Promise<AsyncGenerator<ChatEvent>> {
-    const conversation = await this.conversations.getOrThrow(conversationId);
-    const history = await this.conversations.listMessages(conversationId);
+  /** One assistant turn: record the question, stream the answer, save what arrived. */
+  async *streamReply(conversationId: string, dto: SendMessageDto, signal: AbortSignal): AsyncGenerator<ChatEvent> {
+    // throws before the first event, and Nest holds the SSE headers until then,
+    // so an unknown conversation still comes back as a JSON 404
+    const conversation = this.conversations.getOrThrow(conversationId);
+    const history = this.conversations.listMessages(conversationId);
 
-    const userMessage: Message = {
-      id: newId('message'),
+    this.conversations.appendMessage({
+      id: newId('msg'),
       conversationId,
       role: 'user',
-      blocks: [{ type: 'text', text: dto.content }],
+      content: dto.content,
       createdAt: new Date().toISOString(),
-    };
-    await this.conversations.appendMessage(userMessage);
-    if (conversation.title === DEFAULT_TITLE && history.length === 0) {
+    });
+    if (history.length === 0 && conversation.title === DEFAULT_TITLE) {
       // placeholder until LLM-generated titles arrive in phase 2
-      await this.conversations.setTitle(conversationId, truncateTitle(dto.content));
+      this.conversations.setTitle(conversationId, truncateTitle(dto.content));
     }
 
-    const settings = { ...conversation.settings, ...dto.options };
-    const models = this.capabilities.get().models;
-    const request: LlmRequest = {
-      messages: [...history, userMessage].map((m) => ({ role: m.role, blocks: m.blocks })),
-      system: settings.system ?? loadPrompt('system'),
-      temperature: settings.temperature,
-      maxTokens: settings.maxTokens,
-      model: settings.model,
-      modelId: models.find((m) => m.alias === settings.model)?.id ?? settings.model,
-    };
-    return this.run(conversationId, request, signal);
-  }
+    const messageId = newId('msg');
+    const messages = [...history, { role: 'user' as const, content: dto.content }].map(({ role, content }) => ({
+      role,
+      content,
+    }));
 
-  private async *run(conversationId: string, request: LlmRequest, signal: AbortSignal): AsyncGenerator<ChatEvent> {
-    const assistantId = newId('message');
-    const acc = new AssistantAccumulator();
+    let text = '';
+    let stopReason: StopReason | undefined;
     let failed = false;
 
+    yield { type: 'message_start', messageId };
     try {
-      for await (const event of this.llm.stream(request, signal)) {
-        acc.apply(event);
+      for await (const event of this.llm.stream({ messages }, signal)) {
+        if (event.type === 'text_delta') text += event.text;
+        if (event.type === 'message_done') stopReason = event.stopReason;
         if (event.type === 'error') failed = true;
-        // the persisted id is the one the client sees
-        yield event.type === 'message_start' ? { ...event, messageId: assistantId } : event;
+        yield event;
       }
     } catch (err) {
       this.logger.error(err instanceof Error ? err.message : String(err));
       failed = true;
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      yield { type: 'error', code: 'provider_error', message, retryable: false };
+      yield { type: 'error', code: 'provider_error', message: err instanceof Error ? err.message : 'Unknown error' };
     } finally {
-      if (signal.aborted && !acc.stopReason) acc.stopReason = 'aborted';
-      if (acc.blocks.length > 0 || !failed) {
-        await this.conversations.appendMessage({
-          id: assistantId,
+      // neither message_done nor error means the stream was cut short: the Stop button.
+      // (`signal` cannot tell us — Nest also aborts it when the response completes normally.)
+      if (!stopReason && !failed) stopReason = 'aborted';
+      // keep what the model managed to say, even after a Stop or an error
+      if (text || !failed) {
+        this.conversations.appendMessage({
+          id: messageId,
           conversationId,
           role: 'assistant',
-          blocks: acc.blocks,
-          ...(acc.model && { model: acc.model }),
-          ...(acc.usage && { usage: acc.usage }),
-          ...(acc.stopReason && { stopReason: acc.stopReason }),
+          content: text,
+          ...(stopReason && { stopReason }),
           createdAt: new Date().toISOString(),
-        }).catch((e: unknown) => this.logger.error(`persist failed: ${String(e)}`));
+        });
       }
     }
   }

@@ -1,18 +1,10 @@
 import { Module } from '@nestjs/common';
-import { APP_CONFIG, type AppConfig } from '../config/config.module';
-import { AnthropicLlmProvider } from './anthropic/anthropic-llm.provider';
-import { LLM_PROVIDER, type LlmProvider } from './llm-provider';
+import { LLM_PROVIDER } from './llm-provider';
 import { MockLlmProvider } from './mock/mock-llm.provider';
 
+/** The seam where the real Anthropic provider plugs in (phase 2). */
 @Module({
-  providers: [
-    {
-      provide: LLM_PROVIDER,
-      inject: [APP_CONFIG],
-      useFactory: (config: AppConfig): LlmProvider =>
-        config.LLM_PROVIDER === 'anthropic' ? new AnthropicLlmProvider() : new MockLlmProvider(),
-    },
-  ],
+  providers: [{ provide: LLM_PROVIDER, useFactory: () => new MockLlmProvider() }],
   exports: [LLM_PROVIDER],
 })
 export class LlmModule {}
