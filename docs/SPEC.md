@@ -41,7 +41,8 @@ chatbot/
 │  ├─ SPEC.md              this file
 │  ├─ ROADMAP.md           phases, scope, acceptance criteria
 │  └─ features/            one spec per phase/feature, from _template.md
-└─ CLAUDE.md               rules for coding agents
+├─ CLAUDE.md               rules for coding agents
+└─ .env.example
 ```
 
 ## 3. Tech stack
@@ -69,6 +70,7 @@ Global prefix `/api`. Modules that exist today:
 
 | Module | Responsibility |
 |---|---|
+| `ConfigModule` | load `.env`, validate with zod, typed `AppConfig` |
 | `LlmModule` | `LlmProvider` interface + `MockLlmProvider` |
 | `ConversationsModule` | conversations and their messages (in memory) |
 | `ChatModule` | `ChatService`: runs one turn, emits `ChatEvent`s over SSE |
@@ -211,11 +213,16 @@ will grow into `blocks: Block[]` when the first non-text block appears — tool
 calls in phase 5, thinking and attachments in phase 7. Until then a string says
 exactly what is stored.
 
-## 8. Configuration
+## 8. Configuration (.env)
 
-No env vars yet: port and CORS origin are constants in `main.ts`.
-`ANTHROPIC_API_KEY` is the first env var, arriving in phase 2. Model IDs are
-constants in `LlmModule`.
+```
+PORT=3000
+WEB_ORIGIN=http://localhost:5173
+```
+
+Config is validated at boot; the app fails fast with a readable message.
+`ANTHROPIC_API_KEY` and the model IDs arrive in phase 2, `DATABASE_URL` in
+phase 3. Model IDs are configuration, never literals in code.
 
 ## 9. Frontend (apps/web)
 
