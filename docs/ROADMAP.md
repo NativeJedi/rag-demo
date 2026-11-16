@@ -40,7 +40,7 @@ Acceptance
 
 Scope
 - `AnthropicLlmProvider.stream` / `.complete` with mapping SDK ⇄ domain;
-  env back: `LLM_PROVIDER`, `ANTHROPIC_API_KEY`, `MODEL_DEFAULT`, `MODEL_FAST`
+  `ANTHROPIC_API_KEY` is the only new env var; model IDs are constants in `LlmModule`
 - `prompts/system.md` + loader; per-conversation settings (model alias, system,
   temperature, max tokens) and `PATCH /conversations/:id`
 - `usage` event + `retryable` on `error`; token badge and message footer in the UI
@@ -50,7 +50,7 @@ Scope
 - error mapping (rate limit, overloaded, invalid request) → `error` event with `retryable`
 
 Acceptance
-- `LLM_PROVIDER=anthropic` gives streaming replies; switching back to mock still works
+- the chat gives streaming Claude replies
 - changing system prompt/temperature affects the next turn
 - titles appear in the sidebar automatically
 - opt-in live test passes
