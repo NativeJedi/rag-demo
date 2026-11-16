@@ -69,7 +69,6 @@ Global prefix `/api`. Modules that exist today:
 
 | Module | Responsibility |
 |---|---|
-| `HealthModule` | `GET /health` |
 | `LlmModule` | `LlmProvider` interface + `MockLlmProvider` |
 | `ConversationsModule` | conversations and their messages (in memory) |
 | `ChatModule` | `ChatService`: runs one turn, emits `ChatEvent`s over SSE |
@@ -124,7 +123,6 @@ placeholder routes.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/health` | liveness |
 | GET | `/api/conversations` | list (id, title, updatedAt) newest first |
 | POST | `/api/conversations` | create `{ title? }` → conversation |
 | GET | `/api/conversations/:id` | conversation with messages |

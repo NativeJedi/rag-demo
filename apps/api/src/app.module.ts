@@ -4,11 +4,10 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import { AllExceptionsFilter } from './common/http-exception.filter';
 import { ChatModule } from './modules/chat/chat.module';
 import { ConversationsModule } from './modules/conversations/conversations.module';
-import { HealthModule } from './modules/health/health.module';
 import { LlmModule } from './modules/llm/llm.module';
 
 @Module({
-  imports: [HealthModule, LlmModule, ConversationsModule, ChatModule],
+  imports: [LlmModule, ConversationsModule, ChatModule],
   providers: [
     { provide: APP_PIPE, useClass: ZodValidationPipe },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
