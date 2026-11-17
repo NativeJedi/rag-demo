@@ -1,7 +1,8 @@
 # Roadmap
 
-Each phase turns one block of the "Building with the Claude API" course into a
-product feature. Before starting a phase, create `docs/features/phase-NN-<slug>.md`
+Each phase maps to one section of the "Building with the Claude API" course
+(https://anthropic-partners.skilljar.com/claude-with-the-anthropic-api) and builds
+only what that section teaches. Nothing outside the course is in scope. Before starting a phase, create `docs/features/phase-NN-<slug>.md`
 from `docs/features/_template.md` and get it approved. A phase is done when all
 acceptance criteria pass, `pnpm typecheck && pnpm test && pnpm lint` are green,
 the capability flag is flipped (if any), and SPEC.md reflects reality.
@@ -34,119 +35,89 @@ Acceptance
 - tests: shared schema round-trips, SSE parser, `chatReducer`, conversations
   controller, mock provider, chat SSE end to end
 
-## Phase 2 — Real chat 🟨
-_Done so far: making a request and multi-turn on `AnthropicLlmProvider` (mock removed). Rest of the scope below is pending._
-**Course:** Accessing Claude with the API — making a request, multi-turn, system prompts, temperature, streaming, structured data.
+## Phase 2 — Getting started with Claude 🟨
+_Done so far: making a request and multi-turn on `AnthropicLlmProvider` (mock removed), streaming. Pending: system prompt, structured output._
+**Course:** Getting started with Claude — API authentication, basic requests, conversation management, system prompts, structured output.
 **Goal:** talk to Claude for real.
 
 Scope
-- `AnthropicLlmProvider.stream` / `.complete` with mapping SDK ⇄ domain;
-  `ANTHROPIC_API_KEY` is the only new env var; model IDs are constants in `LlmModule`
-- `prompts/system.md` + loader; per-conversation settings (model alias, system,
-  temperature, max tokens) and `PATCH /conversations/:id`
-- `usage` event + `retryable` on `error`; token badge and message footer in the UI
-- `GET /capabilities` (models, defaults, provider) so the UI stops assuming;
-  model selector and settings drawer
-- auto title after the first exchange via structured output (fast model), `POST /conversations/:id/title`
-- error mapping (rate limit, overloaded, invalid request) → `error` event with `retryable`
+- `AnthropicLlmProvider.stream` with SDK ⇄ domain mapping; `ANTHROPIC_API_KEY` is the only new env var; model ID is a constant inside `modules/llm` ✅
+- multi-turn: `ChatService` sends the full history ✅
+- system prompt in `apps/api/prompts/system.md` + loader (no inline prompt)
+- structured output: JSON via assistant prefill + stop sequence, validated with zod (provider `complete` method; no new UI)
 
 Acceptance
-- the chat gives streaming Claude replies
-- changing system prompt/temperature affects the next turn
-- titles appear in the sidebar automatically
-- opt-in live test passes
+- the chat gives streaming Claude replies and sees earlier messages
+- the system prompt is loaded from `prompts/system.md` and changes the reply style
+- structured output returns a zod-valid object (opt-in live test)
 
-## Phase 3 — Persistence ⬜
-**Course:** none (engineering).
-**Goal:** conversations survive restarts.
-
-Scope: Drizzle + better-sqlite3, migrations, a repository seam extracted from
-`ConversationsService` with a SQLite implementation, partial message persistence
-on abort.
-
-Acceptance: restart keeps all conversations and messages; repository tests run on an in-memory SQLite.
-
-## Phase 4 — Evals & prompt engineering ⬜
-**Course:** Prompt evaluation; Prompt engineering techniques.
+## Phase 3 — Prompt engineering & evaluation ⬜
+**Course:** Prompt engineering & evaluation — prompting strategies, evaluation frameworks, systematic testing.
 **Goal:** measure and improve the system prompt instead of guessing.
 
 Scope
-- `evals/` workspace: dataset generation with the fast model, runner using the
-  real `ChatService` (Nest application context), model-based and code-based graders
+- `evals/` workspace: dataset generation with a fast model, runner using the real `ChatService` (Nest application context), model-based and code-based graders
 - report (score per case + average) saved to `evals/results/` and printed
-- iterate `prompts/system.md` with clear/specific instructions, XML structure and examples; record before/after scores
+- iterate `prompts/system.md`: clear and direct instructions, XML structure, examples; record before/after scores
 
 Acceptance: `pnpm eval` runs end to end; at least one prompt revision with a documented score change.
 
-## Phase 5 — Tools & agent loop ⬜
-**Course:** Tool use with Claude.
+## Phase 4 — Tool use with Claude ⬜
+**Course:** Tool use with Claude — function calling, multi-turn tool interactions, batch tool calling, built-in tools.
 **Goal:** the assistant can act.
 
 Scope
-- `Message.content` grows into `blocks: Block[]` (text + tool_call + tool_result),
-  across shared, `ChatService`, the web reducer and the message list in one change
-- `ToolsModule` registry (`GET /tools`): zod schema → JSON schema, executor, enable/disable
-- agent loop in `ChatService` (SPEC §4.2), bounded steps, parallel tool calls in one turn
-- tools: current datetime, add duration to date, reminders (create/list), batch tool
-- server tools: web search; text editor tool over a sandboxed `data/notes/` dir
-- fine-grained tool input streaming → `tool_call_delta`
-- `GET /tools` real; `features.tools = true`
+- `Message.content` grows into `blocks: Block[]` (text + tool_use + tool_result), across shared, `ChatService`, the web reducer and the message list in one change
+- tool definitions (zod → JSON schema) and executor; loop in `ChatService`: call → run tool → send `tool_result` → repeat until the model stops
+- tools: current datetime, add duration to date, reminders (create/list), batch tool (several calls in one turn)
+- built-in tools: web search; text editor tool over a sandboxed `data/notes/` dir
+- UI renders tool calls and results as cards
 
-Acceptance: multi-step tool use renders as cards in the UI; tool errors are surfaced to the model and the UI; loop stops at `MAX_AGENT_STEPS`.
+Acceptance: multi-step tool use renders as cards; a tool error is returned to the model as an error result and shown in the UI.
 
-## Phase 6 — Knowledge base (RAG) ⬜
-**Course:** RAG and Agentic Search.
+## Phase 5 — Retrieval augmented generation ⬜
+**Course:** RAG — text chunking, embeddings, hybrid search with BM25, multi-index architectures, reranking, contextual retrieval.
 **Goal:** answer from the user's own documents.
 
 Scope
-- upload text/markdown/PDF-to-text into `KnowledgeModule`
-- chunking strategies (size/overlap, structure-aware), Voyage embeddings, vector index
-- BM25 lexical index, hybrid merge (reciprocal rank fusion), contextual retrieval (chunk context via fast model)
-- `search_knowledge` tool used by the agent (agentic search); knowledge page in the UI
-- eval cases for retrieval quality added to `evals/`
+- upload text/markdown into `KnowledgeModule`
+- chunking strategies (size/overlap, structure-aware), embeddings, vector index
+- BM25 lexical index, hybrid merge (reciprocal rank fusion) as a multi-index search
+- reranking of merged results with Claude
+- contextual retrieval (chunk context generated by a fast model)
+- `search_knowledge` tool for the Phase 4 loop; knowledge page in the UI
+- retrieval cases added to `evals/`
 
-Acceptance: uploaded docs are retrievable; hybrid beats either index alone on the eval set; `features.knowledge = true`.
+Acceptance: uploaded docs are retrievable; hybrid (+ rerank, + contextual) beats a single index on the eval set.
 
-## Phase 7 — Claude features ⬜
-**Course:** Features of Claude — extended thinking, images, PDF, citations, prompt caching, code execution & Files API.
-**Goal:** richer inputs and outputs, lower cost.
-
-Scope
-- attachments: images and PDFs in the composer → `AttachmentsModule` → Files API
-- citations on PDF/knowledge answers → `citation` events → chips in UI
-- extended thinking toggle + budget; thinking blocks preserved across turns
-- prompt caching: breakpoints on system prompt, tools, long documents; cache tokens in usage UI
-- code execution tool (optional)
-
-Acceptance: image and PDF questions work; citations link to sources; cache read tokens > 0 on repeated turns; flags `attachments`, `citations`, `thinking` = true.
-
-## Phase 8 — MCP ⬜
-**Course:** Model Context Protocol.
+## Phase 6 — Model Context Protocol (MCP) ⬜
+**Course:** MCP — custom tools and resources, MCP servers and clients, full integration lifecycle.
 **Goal:** standard integrations.
 
 Scope
-- `packages/mcp-docs-server`: tools (read/edit doc), resources (doc list, doc content), prompts (e.g. summarize, rewrite as markdown); testable with the MCP inspector
-- `McpModule`: client manager (stdio), servers configurable via API/UI, MCP tools merged into the tool registry
+- `packages/mcp-docs-server`: tools (read/edit doc), resources (doc list, doc content), prompts; testable with the MCP inspector
+- `McpModule`: client (stdio) connected to that server, MCP tools merged into the Phase 4 tool registry
 - UI: `@` mentions insert resources into context; `/` commands run MCP prompts
 
-Acceptance: own server works via inspector and in chat; an external MCP server can be added; `features.mcp = true`.
+Acceptance: own server works via the inspector and in chat.
 
-## Phase 9 — Workflows & agents ⬜
-**Course:** Agents and workflows.
-**Goal:** smarter orchestration.
+## Phase 7 — Agents and workflows ⬜
+**Course:** Agents and workflows — parallelization, chaining, routing, debugging.
+**Goal:** orchestration patterns on top of the chat.
 
 Scope
-- routing: classify each request → fast vs default model and tool subset
-- chaining: e.g. draft → critique → revise for long-form requests
-- parallelization: "Research" mode splitting a question into sub-queries, then synthesis
-- environment inspection: tools that let the agent check results of its own actions
-- UI shows workflow steps; eval comparing routed vs unrouted cost/quality
+- chaining: draft → critique → revise for long-form requests
+- parallelization: split a question into sub-queries run concurrently, then synthesize
+- routing: classify a request and pick the model/prompt
+- agent with tools checking the results of its own actions; workflow steps visible in the UI and logged for debugging
 
-Acceptance: research mode produces a synthesized answer with visible steps; routing reduces average cost on the eval set without lowering score; `features.workflows = true`.
+Acceptance: each pattern works end to end with visible steps.
 
 ---
 
-## Out of scope / optional
-- Computer use (course mentions it; not part of this product)
-- Auth, multi-user, deployment — add a phase if needed
-- Claude Code is used as the development tool throughout, not as a product feature
+## Out of scope
+Anything not taught in the course sections above, including: persistence/database,
+per-conversation settings, model selector, `/capabilities`, token usage UI, auto
+titles, extended thinking, images/PDF/citations, prompt caching, code execution,
+Files API, auth, deployment. Claude Code is the development tool, not a product
+feature; Computer Use is not part of this product.

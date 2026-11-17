@@ -30,4 +30,4 @@ React + Tailwind web, shared zod contracts.
   change between versions.
 
 ## Commands
-pnpm dev | pnpm test | pnpm typecheck | pnpm lint | pnpm build | pnpm eval (phase 4+)
+pnpm dev | pnpm test | pnpm typecheck | pnpm lint | pnpm build | pnpm eval (phase 3+)

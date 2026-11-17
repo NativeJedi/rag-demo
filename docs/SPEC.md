@@ -13,14 +13,13 @@
 
 A web chat assistant built on the Claude API. It grows feature by feature while
 the author works through Anthropic's "Building with the Claude API" course
-(Python in the course, TypeScript here). The course is a topic guide, not a
-lesson-by-lesson port: each topic becomes a product feature (see `ROADMAP.md`).
+(Python in the course, TypeScript here). Each course section becomes one phase and
+builds only what the section teaches (see `ROADMAP.md`).
 
-End state: streaming multi-turn chat with persistent conversations, tools and an
-agent loop, image/PDF attachments with citations, extended thinking, a personal
-knowledge base (hybrid RAG), prompt caching with token accounting, MCP
-integration (own docs server + external servers), routing and research workflows,
-and an eval suite guarding prompt quality.
+End state: streaming multi-turn chat with a system prompt and structured
+output, an eval suite for the prompt, tool use, a personal knowledge base
+(hybrid RAG with reranking), MCP integration (own docs server), and
+workflow/agent patterns (chaining, parallelization, routing).
 
 Single user, local-first. Auth and multi-tenancy are out of scope unless the
 roadmap is changed.
@@ -62,7 +61,7 @@ chatbot/
 | Shared pkg | source-only (`exports` → `src/index.ts`), no build step | relative imports use `.ts` so Node 22.18+ can load it at runtime |
 | Tests | Vitest everywhere (api via `unplugin-swc`), per-package config | Testing Library + jsdom on web |
 | Lint/format | ESLint 9 flat config + Prettier at root | `no-explicit-any` is an error |
-| Storage | in-memory maps inside `ConversationsService`; SQLite via Drizzle in phase 3 | |
+| Storage | in-memory maps inside `ConversationsService` | |
 
 ## 4. Backend architecture (apps/api)
 
@@ -75,8 +74,7 @@ Global prefix `/api`. Modules that exist today:
 | `ConversationsModule` | conversations and their messages (in memory) |
 | `ChatModule` | `ChatService`: runs one turn, emits `ChatEvent`s over SSE |
 
-Later phases add their own modules (tools, attachments, knowledge, MCP,
-workflows) when they are built — see `ROADMAP.md`.
+Later phases add their own modules (tools, knowledge, MCP, workflows) when they are built — see `ROADMAP.md`.
 
 ### 4.1 LlmProvider
 
@@ -92,7 +90,7 @@ interface LlmProvider {
   text deltas and the stop reason to `ChatEvent`s. Errors are thrown and turned into
   an `error` event by `ChatService`.
 - `LlmRequest` is our domain shape: `{ messages: { role, content }[] }`.
-  System prompt, temperature and per-conversation settings arrive later in phase 2.
+  The system prompt comes from `prompts/system.md` (phase 2).
 
 ### 4.2 ChatService turn lifecycle
 
@@ -100,8 +98,7 @@ interface LlmProvider {
 reads top to bottom:
 
 1. Load the conversation (throws → 404), snapshot the history, append the user
-   message. The first message sets a truncated placeholder title (LLM-generated
-   titles: phase 2).
+   message. The first message sets a truncated title.
 2. Emit `message_start` with the id the assistant message will be persisted
    under, then forward every provider event, accumulating the text.
 3. Persist in a `finally`, so a Stop or an error still keeps whatever the model
@@ -135,8 +132,7 @@ placeholder routes.
 { "content": "string" }   // required, 1..32k chars
 ```
 
-Per-turn options (model, system prompt, temperature, max tokens) arrive with
-phase 2, attachments with phase 7.
+The request carries only the message text.
 
 ## 6. Streaming contract
 
@@ -194,8 +190,7 @@ the connection, which the server treats as Stop.
 
 Adding an event type is a deliberate, four-place change: the union in `shared`,
 the mock provider, the real provider's mapping and the web `chatReducer` — in
-one commit. Later phases each bring their own: `usage` (2), `tool_call*` and
-`tool_result` (5), `thinking_delta` (7), `citation` (7).
+one commit. Phase 4 (tool use) brings its own tool events.
 
 ## 7. Data model (domain, storage-agnostic)
 
@@ -208,7 +203,7 @@ IDs are prefixed ULIDs (`conv_`, `msg_`).
 
 Message content is plain text. The Messages API is block-based, and this model
 will grow into `blocks: Block[]` when the first non-text block appears — tool
-calls in phase 5, thinking and attachments in phase 7. Until then a string says
+calls in phase 4. Until then a string says
 exactly what is stored.
 
 ## 8. Configuration (.env)
@@ -220,7 +215,7 @@ ANTHROPIC_API_KEY=
 ```
 
 Config is validated at boot; the app fails fast with a readable message.
-`ANTHROPIC_API_KEY` is required; `DATABASE_URL` arrives in phase 3.
+`ANTHROPIC_API_KEY` is required.
 Model IDs are constants inside `modules/llm` (in `AnthropicLlmProvider`), never literals elsewhere.
 
 ## 9. Frontend (apps/web)
@@ -240,9 +235,6 @@ demonstrated. Two columns, always visible.
 - **Composer**: textarea, Enter to send / Shift+Enter newline, one button that is
   Send or Stop.
 - Empty state: two sample prompts that send on click (the default reply and `/error`).
-
-Model selection, settings and the token usage badge come back in phase 2, with
-the API that makes them mean something.
 
 ### 9.2 Structure
 
@@ -288,4 +280,4 @@ every event type in the union (exhaustive `switch` with `never` check).
 | `pnpm typecheck` | `tsc --noEmit` everywhere |
 | `pnpm test` | unit tests everywhere |
 | `pnpm lint` / `pnpm format` | ESLint / Prettier |
-| `pnpm eval` | (phase 4) run eval suite |
+| `pnpm eval` | (phase 3) run eval suite |

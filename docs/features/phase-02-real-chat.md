@@ -1,17 +1,18 @@
-# Phase 02 — Real chat (part 1: request + multi-turn)
+# Phase 02 — Getting started with Claude
 
 Status: approved
-Course lessons: making a request, multi-turn conversations
-Roadmap: docs/ROADMAP.md#phase-2--real-chat-
+Course section: Getting started with Claude
+Roadmap: docs/ROADMAP.md#phase-2--getting-started-with-claude-
 
 ## Goal
 The chat talks to Claude for real, and follow-up messages see the whole conversation.
 
 ## Scope
-- In: `AnthropicLlmProvider` (streaming), `ANTHROPIC_API_KEY` config,
-  removal of `MockLlmProvider`. Multi-turn already works: `ChatService` sends full history.
-- Out (rest of phase 2): system prompt, temperature, settings and PATCH, `usage`, `retryable`,
-  `/capabilities`, model selector, auto title, error mapping.
+- In: `AnthropicLlmProvider` (streaming), `ANTHROPIC_API_KEY` config, removal of
+  `MockLlmProvider`, multi-turn (`ChatService` sends full history) — done.
+  Still to do: system prompt from `prompts/system.md`; structured output (JSON via
+  prefill + stop sequence, zod-validated).
+- Out: everything not taught in this course section (see ROADMAP "Out of scope").
 
 ## Design
 - Modules touched: `LlmModule` (provider + factory), config schema, `test-app.ts` (inline fake provider).
@@ -23,5 +24,7 @@ The chat talks to Claude for real, and follow-up messages see the whole conversa
 - [ ] `pnpm dev` with a real key streams Claude replies
 - [ ] second message in a conversation sees the first (history sent)
 - [ ] Stop keeps the partial reply
+- [ ] system prompt loaded from `prompts/system.md`
+- [ ] structured output returns a zod-valid object (opt-in live test)
 - [x] typecheck, test, lint green
 - [x] SPEC.md and ROADMAP.md updated

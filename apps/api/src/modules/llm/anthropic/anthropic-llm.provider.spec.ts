@@ -7,8 +7,12 @@ import { AnthropicLlmProvider } from './anthropic-llm.provider';
 const sdk = vi.hoisted(() => ({ stream: vi.fn() }));
 vi.mock('@anthropic-ai/sdk', () => ({ default: class { messages = { stream: sdk.stream }; } }));
 
-function setup(sdkEvents: object[]) {
-  const stream = sdk.stream.mockImplementation(() => (async function* () { yield* sdkEvents; })());
+function setup(sdkEvents: object[], stopReason: string = 'end_turn') {
+  const stream = sdk.stream.mockImplementation(() =>
+    Object.assign((async function* () { yield* sdkEvents; })(), {
+      finalMessage: async () => ({ stop_reason: stopReason }),
+    }),
+  );
   const provider = new AnthropicLlmProvider({ ANTHROPIC_API_KEY: 'test-key' } as AppConfig);
   const run = async (messages: LlmMessage[] = [{ role: 'user', content: 'hi' }]) => {
     const events: ChatEvent[] = [];
@@ -22,7 +26,7 @@ const delta = (text: string) => ({ type: 'content_block_delta', delta: { type: '
 
 describe('AnthropicLlmProvider', () => {
   it('maps text deltas and ends with message_done', async () => {
-    const { run } = setup([delta('Hel'), delta('lo'), { type: 'message_delta', delta: { stop_reason: 'end_turn' } }]);
+    const { run } = setup([delta('Hel'), delta('lo')]);
     expect(await run()).toEqual([
       { type: 'text_delta', text: 'Hel' },
       { type: 'text_delta', text: 'lo' },
@@ -31,7 +35,7 @@ describe('AnthropicLlmProvider', () => {
   });
 
   it('maps max_tokens', async () => {
-    const { run } = setup([delta('x'), { type: 'message_delta', delta: { stop_reason: 'max_tokens' } }]);
+    const { run } = setup([delta('x')], 'max_tokens');
     expect((await run()).at(-1)).toEqual({ type: 'message_done', stopReason: 'max_tokens' });
   });
 

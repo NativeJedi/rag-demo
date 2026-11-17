@@ -6,6 +6,7 @@ import type { LlmProvider, LlmRequest } from '../llm-provider';
 
 const MODEL = 'claude-haiku-5-5';
 const MAX_TOKENS = 4096;
+const SYSTEM_PROMPT = 'You are a patient math tutor. Do not directly answer a student\'s questions. Guide them to a solution step by step.'
 
 @Injectable()
 export class AnthropicLlmProvider implements LlmProvider {
@@ -17,18 +18,18 @@ export class AnthropicLlmProvider implements LlmProvider {
 
   async *stream(request: LlmRequest, signal: AbortSignal): AsyncGenerator<ChatEvent> {
     const stream = this.client.messages.stream(
-      { model: MODEL, max_tokens: MAX_TOKENS, messages: request.messages },
+      { model: MODEL, max_tokens: MAX_TOKENS, messages: request.messages, system: SYSTEM_PROMPT },
       { signal },
     );
-    let stopReason: StopReason = 'end_turn';
+    let stopReason: StopReason;
     try {
       for await (const event of stream) {
         if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
           yield { type: 'text_delta', text: event.delta.text };
-        } else if (event.type === 'message_delta' && event.delta.stop_reason === 'max_tokens') {
-          stopReason = 'max_tokens';
         }
       }
+      const message = await stream.finalMessage();
+      stopReason = message.stop_reason === 'max_tokens' ? 'max_tokens' : 'end_turn';
     } catch (err) {
       if (signal.aborted) return; // Stop button: ChatService records the abort
       throw err;
