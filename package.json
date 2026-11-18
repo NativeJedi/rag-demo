@@ -10,7 +10,7 @@
     "typecheck": "pnpm -r --parallel typecheck",
     "test": "pnpm -r test",
     "lint": "eslint .",
-    "eval": "pnpm --filter @chatbot/api build && pnpm --filter @chatbot/evals start",
+    "eval": "pnpm --filter @chatbot/evals start",
     "format": "prettier --write ."
   },
   "devDependencies": {

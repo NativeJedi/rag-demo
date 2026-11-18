@@ -2,9 +2,8 @@ import 'reflect-metadata';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { NestFactory } from '@nestjs/core';
-// Runtime: the built API (`pnpm eval` builds it first). Types: the API source (tsconfig.json paths; tsconfig.run.json has none so tsx loads the built code).
-import { AppModule } from '@chatbot/api/dist/app.module';
-import { ChatService } from '@chatbot/api/dist/modules/chat/chat.service';
+import { AppModule } from '@chatbot/api/src/app.module';
+import { ChatService } from '@chatbot/api/src/modules/chat/chat.service';
 
 async function main(): Promise<void> {
   const envFile = join(__dirname, '..', '..', '..', '.env');
