@@ -21,7 +21,7 @@ export class AnthropicLlmProvider implements LlmProvider {
 
   async *stream(request: LlmRequest, signal: AbortSignal): AsyncGenerator<ChatEvent> {
     const stream = this.client.messages.stream(
-      { model: MODEL, max_tokens: MAX_TOKENS, messages: request.messages, system: SYSTEM_PROMPT },
+      { model: MODEL, max_tokens: MAX_TOKENS, messages: request.messages, system: request.system ?? SYSTEM_PROMPT },
       { signal },
     );
     let stopReason: StopReason;

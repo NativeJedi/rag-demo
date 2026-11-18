@@ -10,6 +10,8 @@ export interface LlmMessage {
 /** Our domain request shape. SDK mapping stays inside the provider that needs it. */
 export interface LlmRequest {
   messages: LlmMessage[];
+  /** Overrides the default system prompt (used by the eval generator and judge). */
+  system?: string;
 }
 
 export interface LlmProvider {

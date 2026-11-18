@@ -52,6 +52,13 @@ describe('AnthropicLlmProvider', () => {
     expect(stream).toHaveBeenCalledWith(expect.objectContaining({ model: 'claude-haiku-5-5', messages }), expect.anything());
   });
 
+  it('lets a request override the system prompt', async () => {
+    const { stream } = setup([]);
+    const provider = new AnthropicLlmProvider({ ANTHROPIC_API_KEY: 'k' } as AppConfig);
+    for await (const _ of provider.stream({ messages: [{ role: 'user', content: 'hi' }], system: 'custom' }, new AbortController().signal));
+    expect(stream).toHaveBeenCalledWith(expect.objectContaining({ system: 'custom' }), expect.anything());
+  });
+
   it('sends the system prompt from prompts/system.md', async () => {
     const { run, stream } = setup([]);
     await run();

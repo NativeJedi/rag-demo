@@ -1,13 +1,11 @@
 import 'reflect-metadata';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '@chatbot/api/src/app.module';
 import { ChatService } from '@chatbot/api/src/modules/chat/chat.service';
+import { loadDotEnv } from './env';
 
 async function main(): Promise<void> {
-  const envFile = join(__dirname, '..', '..', '..', '.env');
-  if (existsSync(envFile)) process.loadEnvFile(envFile);
+  loadDotEnv();
 
   const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error'] });
   const chat = app.get(ChatService);

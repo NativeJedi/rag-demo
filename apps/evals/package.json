@@ -4,18 +4,22 @@
   "private": true,
   "scripts": {
     "start": "node -r @swc-node/register src/run.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dataset": "node -r @swc-node/register src/generate-dataset.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@chatbot/api": "workspace:*",
     "@nestjs/common": "^11.2.9",
     "@nestjs/core": "^11.2.9",
-    "reflect-metadata": "^0.2.2"
+    "reflect-metadata": "^0.2.2",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@swc-node/register": "^1.11.0",
     "@swc/core": "^1.16.22",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vitest": "^4.1.12"
   }
 }
