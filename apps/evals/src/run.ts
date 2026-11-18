@@ -3,8 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '@chatbot/api/src/app.module';
-import { ChatService } from '@chatbot/api/src/modules/chat/chat.service';
-import { ConversationsService } from '@chatbot/api/src/modules/conversations/conversations.service';
+import { LLM_PROVIDER, type LlmProvider } from '@chatbot/api/src/modules/llm/llm-provider';
 import { DatasetSchema } from './dataset';
 import { loadDotEnv } from './env';
 import { runCases } from './runner';
@@ -14,11 +13,10 @@ async function main(): Promise<void> {
   const cases = DatasetSchema.parse(JSON.parse(readFileSync(join(__dirname, '..', 'dataset.json'), 'utf8')));
 
   const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error'] });
-  const chat = app.get(ChatService);
-  const conversations = app.get(ConversationsService);
+  const llm = app.get<LlmProvider>(LLM_PROVIDER);
 
-  // every case is a fresh conversation, answered by the real ChatService
-  const reply = (input: string): Promise<string> => chat.reply(conversations.create({}).id, { content: input });
+  // the provider owns the system prompt, so a bare completion is exactly what we want to test
+  const reply = (input: string): Promise<string> => llm.complete({ messages: [{ role: 'user', content: input }] });
 
   const results = await runCases(cases, reply);
   for (const r of results) {

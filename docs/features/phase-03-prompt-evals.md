@@ -57,12 +57,12 @@ Case shape (single-turn only):
 
 ### Pipeline
 1. **Generate** (`pnpm eval:dataset`): model returns cases as JSON, zod-validated, written to `dataset.json`.
-2. **Run** (`pnpm eval`): `NestFactory.createApplicationContext(AppModule)`, take `ChatService`, call it per case, collect the full reply.
+2. **Run** (`pnpm eval`): `NestFactory.createApplicationContext(AppModule)`, take the `LlmProvider` (it owns the system prompt) and call `complete()` per case with just the user message; no conversations, no streaming.
 3. **Grade**: 3 code checks + one judge call per case (model sees input, reply, criteria; returns pass/fail per criterion as zod-validated JSON). Case score = passed checks / total checks.
 4. **Report**: score per case + average, printed and saved to `apps/evals/results/<timestamp>.json`.
 
 ### Modules/files touched
-- `apps/api/prompts/system.md` (new); loading it in `ChatService` if still missing (Phase 2 leftover).
+- `apps/api/prompts/system.md` (new); loaded at runtime by `AnthropicLlmProvider`.
 - `apps/api`: export what `apps/evals` needs to boot the app context (minimal).
 - `apps/evals` (new, covered by existing `apps/*` workspace glob): `src/generate-dataset.ts`, `src/run.ts`, `src/graders.ts`, `dataset.json`, `results/`.
 - Root `package.json`: `eval`, `eval:dataset` scripts.
@@ -75,10 +75,10 @@ Case shape (single-turn only):
 - Messages API via the existing provider (https://docs.claude.com, re-check before coding).
 
 ## Plan
-1. `prompts/system.md` v1; make sure `ChatService` loads it; unit test with the fake provider.
+1. `prompts/system.md` v1; `AnthropicLlmProvider` loads it; unit test.
 2. `apps/evals` skeleton + scripts; green typecheck/lint.
 3. Dataset generator; generate, skim, commit `dataset.json`.
-4. Runner on `ChatService`.
+4. Runner on `LlmProvider.complete()`.
 5. Code graders (unit tests, no network) and judge (unit test with a stub provider).
 6. Report; run baseline on v1.
 7. Write v2, run, record before/after.

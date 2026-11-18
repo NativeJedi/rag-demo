@@ -56,7 +56,7 @@ Acceptance
 **Goal:** measure and improve the system prompt instead of guessing.
 
 Scope
-- `apps/evals` workspace: dataset generation with a fast model, runner using the real `ChatService` (Nest application context), model-based and code-based graders
+- `apps/evals` workspace: dataset generation with a fast model, runner calling the real `LlmProvider`, which owns the system prompt (Nest application context), model-based and code-based graders
 - report (score per case + average) saved to `apps/evals/results/` and printed
 - iterate `prompts/system.md`: clear and direct instructions, XML structure, examples; record before/after scores
 
