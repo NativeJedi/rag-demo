@@ -8,14 +8,16 @@ const cases: Case[] = [
 ];
 
 describe('runCases', () => {
-  it('collects replies and keeps going after an error', async () => {
-    const results = await runCases(cases, async (input) => {
+  it('pairs each case with its reply', async () => {
+    const results = await runCases([cases[0]!], async (input) => `echo ${input}`);
+    expect(results).toEqual([{ case: cases[0], reply: 'echo ok' }]);
+  });
+
+  it('aborts on the first provider error', async () => {
+    const run = runCases(cases, async (input) => {
       if (input === 'boom') throw new Error('provider down');
-      return `echo ${input}`;
+      return 'fine';
     });
-    expect(results.map((r) => [r.case.id, r.reply, r.error])).toEqual([
-      ['a', 'echo ok', undefined],
-      ['b', '', 'provider down'],
-    ]);
+    await expect(run).rejects.toThrow('provider down');
   });
 });

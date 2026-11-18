@@ -7,7 +7,7 @@ import { LLM_PROVIDER, type LlmProvider } from '@chatbot/api/src/modules/llm/llm
 import { codeChecks } from './code-graders';
 import { DatasetSchema } from './dataset';
 import { loadDotEnv } from './env';
-import { type Check, score } from './grade';
+import { score } from './grade';
 import { judgeCriteria } from './judge';
 import { runCases } from './runner';
 
@@ -25,9 +25,7 @@ async function main(): Promise<void> {
 
   const results = await runCases(cases, reply);
   for (const r of results) {
-    const checks: Check[] = r.error
-      ? [{ name: 'tutor replied', passed: false, reason: r.error }]
-      : [...codeChecks(r.reply), ...(await judgeCriteria(llm, judgePrompt, r))];
+    const checks = [...codeChecks(r.reply), ...(await judgeCriteria(llm, judgePrompt, r))];
     console.log(`${r.case.id}: ${score(checks).toFixed(2)}`);
     for (const c of checks.filter((c) => !c.passed)) console.log(`  FAIL ${c.name}${c.reason ? ` (${c.reason})` : ''}`);
   }
