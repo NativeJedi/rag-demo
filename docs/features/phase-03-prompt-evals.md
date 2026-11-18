@@ -12,7 +12,7 @@ score change. This is a demo: keep everything as simple as possible.
 
 ## Scope
 - In:
-  - `apps/api/prompts/system.md` — English-tutor prompt (v1 weak, v2 improved).
+  - `apps/api/prompts/system.md` — English-tutor prompt (the good one); `system.bad.md` is a deliberately weak alternative kept next to it for the demo.
   - `apps/evals` workspace: dataset generator, runner, graders, report.
   - `pnpm eval` and `pnpm eval:dataset`.
   - Before/after scores recorded in Notes below.
@@ -37,8 +37,9 @@ Explanations are in English at B1 level.
 | Ukrainian input: replies in English | judge |
 
 ### Prompt versions
-- **v1** (baseline, weak): `You are an English tutor. Help the user learn English.`
-- **v2**: XML structure (`<role>`, `<rules>`, `<style>`) plus 2–3 `<example>`s.
+- `apps/api/prompts/system.md` — the good prompt (XML structure: `<role>`, `<rules>`, `<examples>`). This is what the app and `pnpm eval` use.
+- `apps/api/prompts/system.bad.md` — a weak prompt ("helpful assistant, as detailed as possible, very enthusiastic"). Not loaded by anything; for the demo, copy it over `system.md`, run `pnpm eval`, then restore the good one and run again to compare reports.
+- The examples in `system.md` must not repeat test cases from `dataset.json` (they did once and inflated the score).
 
 ### Dataset (~15 cases, committed as `apps/evals/dataset.json`)
 Generated once by the fast model, skimmed by hand, committed so before/after runs
@@ -75,19 +76,19 @@ Case shape (single-turn only):
 - Messages API via the existing provider (https://docs.claude.com, re-check before coding).
 
 ## Plan
-1. `prompts/system.md` v1; `AnthropicLlmProvider` loads it; unit test.
+1. `prompts/system.md`; `AnthropicLlmProvider` loads it; unit test.
 2. `apps/evals` skeleton + scripts; green typecheck/lint.
 3. Dataset generator; generate, skim, commit `dataset.json`.
 4. Runner on `LlmProvider.complete()`.
 5. Code graders (unit tests, no network) and judge (unit test with a stub provider).
-6. Report; run baseline on v1.
-7. Write v2, run, record before/after.
+6. Report.
+7. Good and bad prompt side by side; run both and record the scores.
 
 ## Acceptance criteria
 - [ ] `pnpm eval` runs end to end and prints + saves a report
 - [ ] ~15-case dataset committed
 - [ ] code and model graders both used
-- [ ] prompt v1 → v2 with a documented score change
+- [ ] good and bad prompt with a documented score difference
 - [ ] grader unit tests run without network
 - [ ] typecheck, test, lint green
 - [ ] SPEC.md and ROADMAP.md updated; capability flag flipped if applicable
@@ -100,5 +101,5 @@ Case shape (single-turn only):
 - Scores, not verdicts: the eval only produces numbers; whether a reply is actually good is a human call (the judge's reasoning in the JSON is there to audit it). Code checks are measurements (0 or 10), the judge is an opinion (0–10).
 - Judge: a first version returned a pass/fail verdict per criterion in one array and sometimes got the length wrong; replaced by a single 0–10 score per case.
 - Provider errors abort the eval; no partial scores.
-- Baseline, prompt v1: **average 5/10** (`apps/evals/results/2026-11-18T15-21-00-020Z.json`).
-- Prompt v2 score: _to be filled in._
+- Measured once (15 cases): `system.bad.md` **3/10**, `system.md` **10/10**. Near-perfect for the good prompt means the dataset is easy; fine for a demo.
+- `apps/evals/results/` is not committed; run `pnpm eval` to produce a report.
