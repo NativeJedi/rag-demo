@@ -4,9 +4,14 @@ import { join } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '@chatbot/api/src/app.module';
 import { LLM_PROVIDER, type LlmProvider } from '@chatbot/api/src/modules/llm/llm-provider';
+import { codeChecks } from './code-graders';
 import { DatasetSchema } from './dataset';
 import { loadDotEnv } from './env';
+import { type Check, score } from './grade';
+import { judgeCriteria } from './judge';
 import { runCases } from './runner';
+
+const judgePrompt = readFileSync(join(__dirname, '..', 'prompts', 'judge.md'), 'utf8');
 
 async function main(): Promise<void> {
   loadDotEnv();
@@ -20,7 +25,11 @@ async function main(): Promise<void> {
 
   const results = await runCases(cases, reply);
   for (const r of results) {
-    console.log(`${r.case.id}: ${r.error ? `ERROR ${r.error}` : `${r.reply.split(/\s+/).length} words`}`);
+    const checks: Check[] = r.error
+      ? [{ name: 'tutor replied', passed: false, reason: r.error }]
+      : [...codeChecks(r.reply), ...(await judgeCriteria(llm, judgePrompt, r))];
+    console.log(`${r.case.id}: ${score(checks).toFixed(2)}`);
+    for (const c of checks.filter((c) => !c.passed)) console.log(`  FAIL ${c.name}${c.reason ? ` (${c.reason})` : ''}`);
   }
   await app.close();
 }
