@@ -53,13 +53,13 @@ Case shape (single-turn only):
   "criteria": ["Gives the corrected sentence 'I went to the cinema yesterday.'", "Explains the rule briefly"]
 }
 ```
-`criteria` are plain-language checks for the judge; no reference answers.
+`criteria` are a plain-language rubric for the judge; no reference answers.
 
 ### Pipeline
 1. **Generate** (`pnpm eval:dataset`): model returns cases as JSON, zod-validated, written to `dataset.json`.
 2. **Run** (`pnpm eval`): `NestFactory.createApplicationContext(AppModule)`, take the `LlmProvider` (it owns the system prompt) and call `complete()` per case with just the user message; no conversations, no streaming.
-3. **Grade**: 3 code checks + one judge call per case (model sees input, reply, criteria; returns pass/fail per criterion as zod-validated JSON). Case score = passed checks / total checks.
-4. **Report**: score per case + average, printed and saved to `apps/evals/results/<timestamp>.json`.
+3. **Grade** (all scores are 0–10): 3 code checks, each exactly 0 or 10, averaged; plus one judge call per case (model sees input, reply and the criteria as a rubric; returns an integer 0–10 and reasoning, schema-validated). Case score = rounded mean of the code score and the judge score.
+4. **Report**: console shows only the score per case and the average (0–10, rounded). The saved `apps/evals/results/<timestamp>.json` has the details (replies, judge reasoning, code checks) for whoever wants to dig in.
 
 ### Modules/files touched
 - `apps/api/prompts/system.md` (new); loaded at runtime by `AnthropicLlmProvider`.
@@ -97,7 +97,8 @@ Case shape (single-turn only):
 - Criteria instead of reference answers: cheaper, easy to review, map to prompt rules.
 - Separate `apps/evals` workspace (not an API module) so eval code stays out of the production build.
 - Dataset committed, not regenerated per run.
-- Judge: one call per criterion (an array of verdicts for all criteria sometimes came back with the wrong length).
+- Scores, not verdicts: the eval only produces numbers; whether a reply is actually good is a human call (the judge's reasoning in the JSON is there to audit it). Code checks are measurements (0 or 10), the judge is an opinion (0–10).
+- Judge: a first version returned a pass/fail verdict per criterion in one array and sometimes got the length wrong; replaced by a single 0–10 score per case.
 - Provider errors abort the eval; no partial scores.
-- Baseline, prompt v1: **average 0.63** (`apps/evals/results/2026-11-18T14-59-36-255Z.json`).
+- Baseline, prompt v1: **average 5/10** (`apps/evals/results/2026-11-18T15-21-00-020Z.json`).
 - Prompt v2 score: _to be filled in._

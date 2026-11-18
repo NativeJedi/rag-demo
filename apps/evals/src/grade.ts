@@ -1,11 +1,26 @@
-export interface Check {
-  name: string;
-  passed: boolean;
-  /** Why it failed (or the judge's note). */
-  reason?: string;
+import type { LlmProvider } from '@chatbot/api/src/modules/llm/llm-provider';
+import { type CodeCheck, codeChecks, codeScore } from './code-graders';
+import { type JudgeVerdict, judge } from './judge';
+import type { RunResult } from './runner';
+
+export interface CaseReport {
+  id: string;
+  category: string;
+  /** 0–10, the rounded mean of the judge score and the code score. */
+  score: number;
+  judge: JudgeVerdict;
+  code: { score: number; checks: CodeCheck[] };
 }
 
-/** Case score = share of passed checks (code checks + judge criteria). */
-export function score(checks: Check[]): number {
-  return checks.length === 0 ? 0 : checks.filter((c) => c.passed).length / checks.length;
+export async function gradeCase(llm: LlmProvider, judgePrompt: string, result: RunResult): Promise<CaseReport> {
+  const checks = codeChecks(result.reply);
+  const verdict = await judge(llm, judgePrompt, result);
+  const code = codeScore(checks);
+  return {
+    id: result.case.id,
+    category: result.case.category,
+    score: Math.round((verdict.score + code) / 2),
+    judge: verdict,
+    code: { score: code, checks },
+  };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { LlmProvider } from '@chatbot/api/src/modules/llm/llm-provider';
-import { judgeCriteria } from './judge';
+import { judge } from './judge';
 import type { RunResult } from './runner';
 
 const result: RunResult = {
@@ -8,22 +8,26 @@ const result: RunResult = {
   reply: 'I went home. OK?',
 };
 
-describe('judgeCriteria', () => {
-  it('asks once per criterion and returns one check each, in order', async () => {
-    const prompts: string[] = [];
-    const llm: LlmProvider = {
-      complete: async () => '',
-      completeJson: async (request, schema) => {
-        prompts.push(request.system ?? '');
-        return schema.parse({ passed: prompts.length === 1, reason: `r${prompts.length}` });
-      },
-      stream: async function* () {},
-    };
-    const checks = await judgeCriteria(llm, '{{input}} | {{reply}} | {{criterion}}', result);
-    expect(prompts).toEqual(['I goed home | I went home. OK? | Corrects it', 'I goed home | I went home. OK? | Ends with a question']);
-    expect(checks).toEqual([
-      { name: 'Corrects it', passed: true, reason: 'r1' },
-      { name: 'Ends with a question', passed: false, reason: 'r2' },
-    ]);
+function stub(verdict: unknown, seen: string[] = []): LlmProvider {
+  return {
+    complete: async () => '',
+    completeJson: async (request, schema) => {
+      seen.push(request.system ?? '');
+      return schema.parse(verdict);
+    },
+    stream: async function* () {},
+  };
+}
+
+describe('judge', () => {
+  it('puts input, reply and criteria into the prompt and returns the verdict', async () => {
+    const seen: string[] = [];
+    const verdict = await judge(stub({ score: 8, reasoning: 'ok' }, seen), '{{input}} | {{reply}} | {{criteria}}', result);
+    expect(verdict).toEqual({ score: 8, reasoning: 'ok' });
+    expect(seen[0]).toBe('I goed home | I went home. OK? | - Corrects it\n- Ends with a question');
+  });
+
+  it('rejects scores outside 0–10', async () => {
+    await expect(judge(stub({ score: 11, reasoning: 'x' }), '', result)).rejects.toThrow();
   });
 });

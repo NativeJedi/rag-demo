@@ -4,10 +4,9 @@ import { join } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '@chatbot/api/src/app.module';
 import { LLM_PROVIDER, type LlmProvider } from '@chatbot/api/src/modules/llm/llm-provider';
-import { codeChecks } from './code-graders';
 import { DatasetSchema } from './dataset';
 import { loadDotEnv } from './env';
-import { judgeCriteria } from './judge';
+import { gradeCase } from './grade';
 import { buildReport, formatReport, saveReport } from './report';
 import { runCases } from './runner';
 
@@ -26,10 +25,7 @@ async function main(): Promise<void> {
 
   const results = await runCases(cases, reply);
   const graded = [];
-  for (const r of results) {
-    const checks = [...codeChecks(r.reply), ...(await judgeCriteria(llm, judgePrompt, r))];
-    graded.push({ id: r.case.id, category: r.case.category, checks });
-  }
+  for (const r of results) graded.push({ ...(await gradeCase(llm, judgePrompt, r)), reply: r.reply });
 
   const report = buildReport(readFileSync(systemPromptFile, 'utf8').trim(), graded);
   console.log(formatReport(report));
