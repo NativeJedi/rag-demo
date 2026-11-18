@@ -7,10 +7,11 @@ import { LLM_PROVIDER, type LlmProvider } from '@chatbot/api/src/modules/llm/llm
 import { codeChecks } from './code-graders';
 import { DatasetSchema } from './dataset';
 import { loadDotEnv } from './env';
-import { score } from './grade';
 import { judgeCriteria } from './judge';
+import { buildReport, formatReport, saveReport } from './report';
 import { runCases } from './runner';
 
+const systemPromptFile = join(__dirname, '..', '..', 'api', 'prompts', 'system.md');
 const judgePrompt = readFileSync(join(__dirname, '..', 'prompts', 'judge.md'), 'utf8');
 
 async function main(): Promise<void> {
@@ -24,11 +25,15 @@ async function main(): Promise<void> {
   const reply = (input: string): Promise<string> => llm.complete({ messages: [{ role: 'user', content: input }] });
 
   const results = await runCases(cases, reply);
+  const graded = [];
   for (const r of results) {
     const checks = [...codeChecks(r.reply), ...(await judgeCriteria(llm, judgePrompt, r))];
-    console.log(`${r.case.id}: ${score(checks).toFixed(2)}`);
-    for (const c of checks.filter((c) => !c.passed)) console.log(`  FAIL ${c.name}${c.reason ? ` (${c.reason})` : ''}`);
+    graded.push({ id: r.case.id, category: r.case.category, checks });
   }
+
+  const report = buildReport(readFileSync(systemPromptFile, 'utf8').trim(), graded);
+  console.log(formatReport(report));
+  console.log(`\nSaved ${saveReport(report, join(__dirname, '..', 'results'))}`);
   await app.close();
 }
 

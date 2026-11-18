@@ -97,4 +97,7 @@ Case shape (single-turn only):
 - Criteria instead of reference answers: cheaper, easy to review, map to prompt rules.
 - Separate `apps/evals` workspace (not an API module) so eval code stays out of the production build.
 - Dataset committed, not regenerated per run.
-- Before/after scores: _to be filled in._
+- Judge: one call per criterion (an array of verdicts for all criteria sometimes came back with the wrong length).
+- Provider errors abort the eval; no partial scores.
+- Baseline, prompt v1: **average 0.63** (`apps/evals/results/2026-11-18T14-59-36-255Z.json`).
+- Prompt v2 score: _to be filled in._
