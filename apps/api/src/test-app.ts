@@ -8,6 +8,8 @@ import { LLM_PROVIDER, type LlmProvider } from './modules/llm/llm-provider';
 /** Echoes the last user message in chunks; `/error` fails mid-stream. No network. */
 function fakeLlm(delayMs: number): LlmProvider {
   return {
+    complete: async (request) => `You said: ${request.messages.at(-1)?.content ?? ''}`,
+    completeJson: async (_request, schema) => schema.parse({}),
     async *stream(request, signal) {
       const input = request.messages.at(-1)?.content ?? '';
       for (const word of `You said: ${input}`.split(/(?<=\s)/)) {

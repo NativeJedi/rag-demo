@@ -33,7 +33,8 @@ chatbot/
 ├─ apps/
 │  ├─ api/                 NestJS backend
 │  │  └─ src/modules/      one Nest module per domain (see §4)
-│  └─ web/                 Vite + React + Tailwind frontend
+│  ├─ web/                 Vite + React + Tailwind frontend
+│  └─ evals/               prompt evaluation CLI (see §12)
 ├─ packages/
 │  └─ shared/              zod schemas + TS types shared by api and web
 ├─ docs/
@@ -81,6 +82,7 @@ Later phases add their own modules (tools, knowledge, MCP, workflows) when they 
 ```ts
 interface LlmProvider {
   stream(request: LlmRequest, signal: AbortSignal): AsyncIterable<ChatEvent>;
+  complete(request: LlmRequest): Promise<string>; // no streaming; evals and background work
 }
 ```
 
@@ -89,7 +91,8 @@ interface LlmProvider {
   `client.messages.stream` (fixed `max_tokens`, model constant in `anthropic-llm.provider.ts`) and maps
   text deltas and the stop reason to `ChatEvent`s. Errors are thrown and turned into
   an `error` event by `ChatService`.
-- `LlmRequest` is our domain shape: `{ messages: { role, content }[] }`.
+- `complete()` is a plain `client.messages.create` returning the whole text.
+- `LlmRequest` is our domain shape: `{ messages: { role, content }[]; system? }`; `system` overrides the default prompt.
   The system prompt comes from `prompts/system.md` (phase 2).
 
 ### 4.2 ChatService turn lifecycle
@@ -265,7 +268,7 @@ every event type in the union (exhaustive `switch` with `never` check).
   plan; the code is what works.
 - Shared contracts live in `packages/shared`; never duplicate a schema.
 - Only `LlmModule` imports `@anthropic-ai/sdk`.
-- Prompts live in `apps/api/prompts/*.md`, loaded at runtime, never inlined in code.
+- Prompts live in `apps/api/prompts/*.md` (eval prompts in `apps/evals/prompts/*.md`), loaded at runtime, never inlined in code.
 - Every new endpoint: zod DTO, controller test, entry in §5 table.
 - Tests use the fake provider in `test-app.ts` or a stub SDK client; no network in unit tests. Live API tests are
   opt-in (`pnpm test:live`) and skipped without `ANTHROPIC_API_KEY`.
@@ -280,4 +283,27 @@ every event type in the union (exhaustive `switch` with `never` check).
 | `pnpm typecheck` | `tsc --noEmit` everywhere |
 | `pnpm test` | unit tests everywhere |
 | `pnpm lint` / `pnpm format` | ESLint / Prettier |
-| `pnpm eval` | (phase 3) run eval suite |
+| `pnpm eval` | score `apps/api/prompts/system.md` on `apps/evals/dataset.json`, print scores, save details to `apps/evals/results/` (real API calls) |
+| `pnpm eval:dataset` | regenerate `apps/evals/dataset.json` with the model |
+
+## 12. Evals (apps/evals)
+
+A CLI, not part of the API build. It boots the API's Nest application context from
+source (`@chatbot/api/src/*`, run with `@swc-node/register` so decorator metadata
+works) and takes `LlmProvider` from it. It never imports the SDK.
+
+- `dataset.json`: ~15 single-turn cases (`id`, `category`, `input`, `criteria`),
+  generated once by `pnpm eval:dataset` and committed.
+- Runner: `llm.complete()` per case with only the user message; the provider's
+  system prompt (`prompts/system.md`) is what is being tested. A provider error
+  aborts the run.
+- Grading, all 0–10: three code checks (≤120 words, ends with a question, no filler
+  opener), each exactly 0 or 10 and averaged; one model judge call per case
+  (`completeJson`, criteria as rubric, integer 0–10 + reasoning). Case score =
+  rounded mean of the two; dataset score = rounded mean of cases.
+- Output: console shows scores only; `results/<timestamp>.json` (git-ignored) has
+  replies, judge reasoning and code checks.
+- Prompts for the generator and judge live in `apps/evals/prompts/`.
+- `LlmProvider` gained `complete()` (plain, non-streaming) and `completeJson()`
+  (schema-constrained via `output_config.format`); `LlmRequest.system` overrides
+  the default prompt.
