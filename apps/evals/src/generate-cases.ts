@@ -1,6 +1,5 @@
 import type { LlmProvider } from '@chatbot/api/src/modules/llm/llm-provider';
 import { type Case, GeneratedSchema } from './dataset';
-import { ask } from './llm';
 
 const PER_CATEGORY = 3;
 const CATEGORIES: Record<string, string> = {
@@ -15,7 +14,7 @@ export async function generateCases(llm: LlmProvider, prompt: string): Promise<C
   const cases: Case[] = [];
   for (const [category, description] of Object.entries(CATEGORIES)) {
     const system = prompt.replace('{{count}}', String(PER_CATEGORY)).replace('{{category}}', description);
-    const reply = await ask(llm, system, 'Write the test cases.');
+    const reply = await llm.complete({ system, messages: [{ role: 'user', content: 'Write the test cases.' }] });
     const json = reply.slice(reply.indexOf('{'), reply.lastIndexOf('}') + 1);
     const generated = GeneratedSchema.parse(JSON.parse(json));
     generated.cases.forEach((c, i) => cases.push({ id: `${category}-${i + 1}`, category, ...c }));

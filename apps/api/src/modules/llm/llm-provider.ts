@@ -16,4 +16,6 @@ export interface LlmRequest {
 
 export interface LlmProvider {
   stream(request: LlmRequest, signal: AbortSignal): AsyncIterable<ChatEvent>;
+  /** One request, the whole text reply (no streaming): for evals and other background work. */
+  complete(request: LlmRequest): Promise<string>;
 }

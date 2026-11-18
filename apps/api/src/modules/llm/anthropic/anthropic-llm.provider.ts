@@ -19,6 +19,16 @@ export class AnthropicLlmProvider implements LlmProvider {
     this.client = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY });
   }
 
+  async complete(request: LlmRequest): Promise<string> {
+    const message = await this.client.messages.create({
+      model: MODEL,
+      max_tokens: MAX_TOKENS,
+      messages: request.messages,
+      system: request.system ?? SYSTEM_PROMPT,
+    });
+    return message.content.map((block) => (block.type === 'text' ? block.text : '')).join('');
+  }
+
   async *stream(request: LlmRequest, signal: AbortSignal): AsyncGenerator<ChatEvent> {
     const stream = this.client.messages.stream(
       { model: MODEL, max_tokens: MAX_TOKENS, messages: request.messages, system: request.system ?? SYSTEM_PROMPT },

@@ -7,7 +7,7 @@ import { LLM_PROVIDER, type LlmProvider } from '@chatbot/api/src/modules/llm/llm
 import { loadDotEnv } from './env';
 import { generateCases } from './generate-cases';
 
-const promptPath = join(__dirname, '..', '..', 'api', 'prompts', 'eval-generate-dataset.md');
+const promptPath = join(__dirname, '..', 'prompts', 'generate-dataset.md');
 
 async function main(): Promise<void> {
   loadDotEnv();

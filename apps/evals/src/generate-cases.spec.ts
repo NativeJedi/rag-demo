@@ -3,12 +3,7 @@ import type { LlmProvider } from '@chatbot/api/src/modules/llm/llm-provider';
 import { generateCases } from './generate-cases';
 
 function stub(reply: string): LlmProvider {
-  return {
-    async *stream() {
-      yield { type: 'text_delta', text: reply };
-      yield { type: 'message_done', stopReason: 'end_turn' };
-    },
-  };
+  return { complete: async () => reply, stream: async function* () {} };
 }
 
 describe('generateCases', () => {

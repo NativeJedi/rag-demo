@@ -81,6 +81,7 @@ Later phases add their own modules (tools, knowledge, MCP, workflows) when they 
 ```ts
 interface LlmProvider {
   stream(request: LlmRequest, signal: AbortSignal): AsyncIterable<ChatEvent>;
+  complete(request: LlmRequest): Promise<string>; // no streaming; evals and background work
 }
 ```
 
@@ -89,7 +90,8 @@ interface LlmProvider {
   `client.messages.stream` (fixed `max_tokens`, model constant in `anthropic-llm.provider.ts`) and maps
   text deltas and the stop reason to `ChatEvent`s. Errors are thrown and turned into
   an `error` event by `ChatService`.
-- `LlmRequest` is our domain shape: `{ messages: { role, content }[] }`.
+- `complete()` is a plain `client.messages.create` returning the whole text.
+- `LlmRequest` is our domain shape: `{ messages: { role, content }[]; system? }`; `system` overrides the default prompt.
   The system prompt comes from `prompts/system.md` (phase 2).
 
 ### 4.2 ChatService turn lifecycle
@@ -265,7 +267,7 @@ every event type in the union (exhaustive `switch` with `never` check).
   plan; the code is what works.
 - Shared contracts live in `packages/shared`; never duplicate a schema.
 - Only `LlmModule` imports `@anthropic-ai/sdk`.
-- Prompts live in `apps/api/prompts/*.md`, loaded at runtime, never inlined in code.
+- Prompts live in `apps/api/prompts/*.md` (eval prompts in `apps/evals/prompts/*.md`), loaded at runtime, never inlined in code.
 - Every new endpoint: zod DTO, controller test, entry in §5 table.
 - Tests use the fake provider in `test-app.ts` or a stub SDK client; no network in unit tests. Live API tests are
   opt-in (`pnpm test:live`) and skipped without `ANTHROPIC_API_KEY`.

@@ -6,8 +6,8 @@ import type { AppConfig } from '../../config/config.module';
 import type { LlmMessage } from '../llm-provider';
 import { AnthropicLlmProvider } from './anthropic-llm.provider';
 
-const sdk = vi.hoisted(() => ({ stream: vi.fn() }));
-vi.mock('@anthropic-ai/sdk', () => ({ default: class { messages = { stream: sdk.stream }; } }));
+const sdk = vi.hoisted(() => ({ stream: vi.fn(), create: vi.fn() }));
+vi.mock('@anthropic-ai/sdk', () => ({ default: class { messages = { stream: sdk.stream, create: sdk.create }; } }));
 
 function setup(sdkEvents: object[], stopReason: string = 'end_turn') {
   const stream = sdk.stream.mockImplementation(() =>
@@ -65,5 +65,12 @@ describe('AnthropicLlmProvider', () => {
     const prompt = readFileSync(join(__dirname, '..', '..', '..', '..', 'prompts', 'system.md'), 'utf8').trim();
     expect(prompt).not.toBe('');
     expect(stream).toHaveBeenCalledWith(expect.objectContaining({ system: prompt }), expect.anything());
+  });
+
+  it('complete() returns the whole text without streaming', async () => {
+    sdk.create.mockResolvedValue({ content: [{ type: 'text', text: 'Hel' }, { type: 'text', text: 'lo' }] });
+    const provider = new AnthropicLlmProvider({ ANTHROPIC_API_KEY: 'k' } as AppConfig);
+    expect(await provider.complete({ messages: [{ role: 'user', content: 'hi' }], system: 'custom' })).toBe('Hello');
+    expect(sdk.create).toHaveBeenCalledWith(expect.objectContaining({ model: 'claude-haiku-5-5', system: 'custom' }));
   });
 });
