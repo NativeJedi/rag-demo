@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.run.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": { "@chatbot/api/dist/*": ["../api/src/*"] }
+  }
+}
