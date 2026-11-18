@@ -9,6 +9,3 @@ Write {{count}} test cases for this category:
 Each case has:
 - "input": the message the learner sends (realistic, written the way a B1 learner would write it).
 - "criteria": 2 to 4 short, checkable statements about what a good tutor reply must do for this input. Phrase each one so a judge can answer yes or no. Do not write the reply itself.
-
-Respond with JSON only, no other text, in exactly this shape:
-{"cases": [{"input": "...", "criteria": ["...", "..."]}]}

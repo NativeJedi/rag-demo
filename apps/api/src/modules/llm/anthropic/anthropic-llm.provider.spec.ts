@@ -1,13 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { z } from 'zod';
 import { describe, expect, it, vi } from 'vitest';
 import type { ChatEvent } from '@chatbot/shared';
 import type { AppConfig } from '../../config/config.module';
 import type { LlmMessage } from '../llm-provider';
 import { AnthropicLlmProvider } from './anthropic-llm.provider';
 
-const sdk = vi.hoisted(() => ({ stream: vi.fn(), create: vi.fn() }));
-vi.mock('@anthropic-ai/sdk', () => ({ default: class { messages = { stream: sdk.stream, create: sdk.create }; } }));
+const sdk = vi.hoisted(() => ({ stream: vi.fn(), create: vi.fn(), parse: vi.fn() }));
+vi.mock('@anthropic-ai/sdk', () => ({ default: class { messages = { stream: sdk.stream, create: sdk.create, parse: sdk.parse }; } }));
 
 function setup(sdkEvents: object[], stopReason: string = 'end_turn') {
   const stream = sdk.stream.mockImplementation(() =>
@@ -72,5 +73,13 @@ describe('AnthropicLlmProvider', () => {
     const provider = new AnthropicLlmProvider({ ANTHROPIC_API_KEY: 'k' } as AppConfig);
     expect(await provider.complete({ messages: [{ role: 'user', content: 'hi' }], system: 'custom' })).toBe('Hello');
     expect(sdk.create).toHaveBeenCalledWith(expect.objectContaining({ model: 'claude-haiku-5-5', system: 'custom' }));
+  });
+
+  it('completeJson() sends the schema as output format and returns the parsed object', async () => {
+    sdk.parse.mockResolvedValue({ parsed_output: { answer: 4 } });
+    const provider = new AnthropicLlmProvider({ ANTHROPIC_API_KEY: 'k' } as AppConfig);
+    const result = await provider.completeJson({ messages: [{ role: 'user', content: '2+2' }] }, z.object({ answer: z.number() }));
+    expect(result).toEqual({ answer: 4 });
+    expect(sdk.parse).toHaveBeenCalledWith(expect.objectContaining({ output_config: { format: expect.objectContaining({ type: 'json_schema' }) } }));
   });
 });

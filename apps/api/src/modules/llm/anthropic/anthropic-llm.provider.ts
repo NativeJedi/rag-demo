@@ -1,8 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
+import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { Inject, Injectable } from '@nestjs/common';
 import type { ChatEvent, StopReason } from '@chatbot/shared';
+import type { ZodType } from 'zod';
 import { APP_CONFIG, type AppConfig } from '../../config/config.module';
 import type { LlmProvider, LlmRequest } from '../llm-provider';
 
@@ -27,6 +29,18 @@ export class AnthropicLlmProvider implements LlmProvider {
       system: request.system ?? SYSTEM_PROMPT,
     });
     return message.content.map((block) => (block.type === 'text' ? block.text : '')).join('');
+  }
+
+  async completeJson<T>(request: LlmRequest, schema: ZodType<T>): Promise<T> {
+    const message = await this.client.messages.parse({
+      model: MODEL,
+      max_tokens: MAX_TOKENS,
+      messages: request.messages,
+      system: request.system ?? SYSTEM_PROMPT,
+      output_config: { format: zodOutputFormat(schema) },
+    });
+    if (message.parsed_output == null) throw new Error('Model returned no structured output');
+    return message.parsed_output;
   }
 
   async *stream(request: LlmRequest, signal: AbortSignal): AsyncGenerator<ChatEvent> {

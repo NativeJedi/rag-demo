@@ -1,4 +1,5 @@
 import type { ChatEvent } from '@chatbot/shared';
+import type { ZodType } from 'zod';
 
 export const LLM_PROVIDER = Symbol('LLM_PROVIDER');
 
@@ -16,6 +17,8 @@ export interface LlmRequest {
 
 export interface LlmProvider {
   stream(request: LlmRequest, signal: AbortSignal): AsyncIterable<ChatEvent>;
-  /** One request, the whole text reply (no streaming): for evals and other background work. */
+  /** One request, the whole text reply (no streaming). */
   complete(request: LlmRequest): Promise<string>;
+  /** Like complete(), but the model is constrained to the schema and the result is parsed and typed. */
+  completeJson<T>(request: LlmRequest, schema: ZodType<T>): Promise<T>;
 }

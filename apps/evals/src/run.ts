@@ -18,15 +18,7 @@ async function main(): Promise<void> {
   const conversations = app.get(ConversationsService);
 
   // every case is a fresh conversation, answered by the real ChatService
-  const reply = async (input: string): Promise<string> => {
-    const { id } = conversations.create({});
-    let text = '';
-    for await (const event of chat.streamReply(id, { content: input }, new AbortController().signal)) {
-      if (event.type === 'text_delta') text += event.text;
-      if (event.type === 'error') throw new Error(event.message);
-    }
-    return text;
-  };
+  const reply = (input: string): Promise<string> => chat.reply(conversations.create({}).id, { content: input });
 
   const results = await runCases(cases, reply);
   for (const r of results) {

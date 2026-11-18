@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { ChatEvent, SendMessageDto, StopReason } from '@chatbot/shared';
 import { newId } from '../../common/ids';
 import { ConversationsService, DEFAULT_TITLE } from '../conversations/conversations.service';
-import { LLM_PROVIDER, type LlmProvider } from '../llm/llm-provider';
+import { LLM_PROVIDER, type LlmMessage, type LlmProvider } from '../llm/llm-provider';
 
 @Injectable()
 export class ChatService {
@@ -13,30 +13,18 @@ export class ChatService {
     @Inject(LLM_PROVIDER) private readonly llm: LlmProvider,
   ) {}
 
+  /** One assistant turn, not streamed: answer in full and save it. Used by the evals. */
+  async reply(conversationId: string, dto: SendMessageDto): Promise<string> {
+    const messages = this.recordQuestion(conversationId, dto);
+    const text = await this.llm.complete({ messages });
+    this.saveAnswer(conversationId, newId('msg'), text, 'end_turn');
+    return text;
+  }
+
   /** One assistant turn: record the question, stream the answer, save what arrived. */
   async *streamReply(conversationId: string, dto: SendMessageDto, signal: AbortSignal): AsyncGenerator<ChatEvent> {
-    // throws before the first event, and Nest holds the SSE headers until then,
-    // so an unknown conversation still comes back as a JSON 404
-    const conversation = this.conversations.getOrThrow(conversationId);
-    const history = this.conversations.listMessages(conversationId);
-
-    this.conversations.appendMessage({
-      id: newId('msg'),
-      conversationId,
-      role: 'user',
-      content: dto.content,
-      createdAt: new Date().toISOString(),
-    });
-    if (history.length === 0 && conversation.title === DEFAULT_TITLE) {
-      // placeholder until LLM-generated titles arrive in phase 2
-      this.conversations.setTitle(conversationId, truncateTitle(dto.content));
-    }
-
+    const messages = this.recordQuestion(conversationId, dto);
     const messageId = newId('msg');
-    const messages = [...history, { role: 'user' as const, content: dto.content }].map(({ role, content }) => ({
-      role,
-      content,
-    }));
 
     let text = '';
     let stopReason: StopReason | undefined;
@@ -60,16 +48,42 @@ export class ChatService {
       if (!stopReason && !failed) stopReason = 'aborted';
       // keep what the model managed to say, even after a Stop or an error
       if (text || !failed) {
-        this.conversations.appendMessage({
-          id: messageId,
-          conversationId,
-          role: 'assistant',
-          content: text,
-          ...(stopReason && { stopReason }),
-          createdAt: new Date().toISOString(),
-        });
+        this.saveAnswer(conversationId, messageId, text, stopReason);
       }
     }
+  }
+
+  /** Saves the user message (and a placeholder title) and returns the history to send, including it. */
+  private recordQuestion(conversationId: string, dto: SendMessageDto): LlmMessage[] {
+    // throws before the first event, and Nest holds the SSE headers until then,
+    // so an unknown conversation still comes back as a JSON 404
+    const conversation = this.conversations.getOrThrow(conversationId);
+    const history = this.conversations.listMessages(conversationId);
+
+    this.conversations.appendMessage({
+      id: newId('msg'),
+      conversationId,
+      role: 'user',
+      content: dto.content,
+      createdAt: new Date().toISOString(),
+    });
+    if (history.length === 0 && conversation.title === DEFAULT_TITLE) {
+      // placeholder until LLM-generated titles arrive in phase 2
+      this.conversations.setTitle(conversationId, truncateTitle(dto.content));
+    }
+
+    return [...history, { role: 'user' as const, content: dto.content }].map(({ role, content }) => ({ role, content }));
+  }
+
+  private saveAnswer(conversationId: string, id: string, content: string, stopReason?: StopReason): void {
+    this.conversations.appendMessage({
+      id,
+      conversationId,
+      role: 'assistant',
+      content,
+      ...(stopReason && { stopReason }),
+      createdAt: new Date().toISOString(),
+    });
   }
 }
 
