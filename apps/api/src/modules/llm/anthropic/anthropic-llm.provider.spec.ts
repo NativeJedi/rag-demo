@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { ChatEvent } from '@chatbot/shared';
 import type { AppConfig } from '../../config/config.module';
@@ -48,5 +50,13 @@ describe('AnthropicLlmProvider', () => {
     ];
     await run(messages);
     expect(stream).toHaveBeenCalledWith(expect.objectContaining({ model: 'claude-haiku-5-5', messages }), expect.anything());
+  });
+
+  it('sends the system prompt from prompts/system.md', async () => {
+    const { run, stream } = setup([]);
+    await run();
+    const prompt = readFileSync(join(__dirname, '..', '..', '..', '..', 'prompts', 'system.md'), 'utf8').trim();
+    expect(prompt).not.toBe('');
+    expect(stream).toHaveBeenCalledWith(expect.objectContaining({ system: prompt }), expect.anything());
   });
 });

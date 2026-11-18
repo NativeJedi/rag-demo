@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
 import { Inject, Injectable } from '@nestjs/common';
 import type { ChatEvent, StopReason } from '@chatbot/shared';
@@ -6,7 +8,8 @@ import type { LlmProvider, LlmRequest } from '../llm-provider';
 
 const MODEL = 'claude-haiku-5-5';
 const MAX_TOKENS = 4096;
-const SYSTEM_PROMPT = 'You are a patient math tutor. Do not directly answer a student\'s questions. Guide them to a solution step by step.'
+// same depth from src/ and dist/: apps/api/prompts/system.md
+const SYSTEM_PROMPT = readFileSync(join(__dirname, '..', '..', '..', '..', 'prompts', 'system.md'), 'utf8').trim();
 
 @Injectable()
 export class AnthropicLlmProvider implements LlmProvider {
