@@ -1,6 +1,6 @@
 # Phase 03 — Prompt engineering & evaluation
 
-Status: approved
+Status: done
 Course lessons: Prompt engineering & evaluation (prompting strategies, evaluation frameworks, systematic testing)
 Roadmap: docs/ROADMAP.md#phase-3--prompt-engineering--evaluation-
 
@@ -85,13 +85,13 @@ Case shape (single-turn only):
 7. Good and bad prompt side by side; run both and record the scores.
 
 ## Acceptance criteria
-- [ ] `pnpm eval` runs end to end and prints + saves a report
-- [ ] ~15-case dataset committed
-- [ ] code and model graders both used
-- [ ] good and bad prompt with a documented score difference
-- [ ] grader unit tests run without network
-- [ ] typecheck, test, lint green
-- [ ] SPEC.md and ROADMAP.md updated; capability flag flipped if applicable
+- [x] `pnpm eval` runs end to end and prints + saves a report
+- [x] ~15-case dataset committed
+- [x] code and model graders both used
+- [x] good and bad prompt with a documented score difference
+- [x] grader unit tests run without network
+- [x] typecheck, test, lint green
+- [x] SPEC.md and ROADMAP.md updated (no capability flag exists for this phase)
 
 ## Notes / decisions
 - Persona: English tutor, Ukrainian-speaking learner, explanations in English, level fixed at B1.

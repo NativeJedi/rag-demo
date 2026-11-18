@@ -51,14 +51,14 @@ Acceptance
 - the system prompt is loaded from `prompts/system.md` and changes the reply style
 - structured output returns a zod-valid object (opt-in live test)
 
-## Phase 3 — Prompt engineering & evaluation ⬜
+## Phase 3 — Prompt engineering & evaluation ✅
 **Course:** Prompt engineering & evaluation — prompting strategies, evaluation frameworks, systematic testing.
 **Goal:** measure and improve the system prompt instead of guessing.
 
 Scope
 - `apps/evals` workspace: dataset generation with a fast model, runner calling the real `LlmProvider`, which owns the system prompt (Nest application context), model-based and code-based graders
 - report (score per case + average) saved to `apps/evals/results/` and printed
-- iterate `prompts/system.md`: clear and direct instructions, XML structure, examples; record before/after scores
+- `prompts/system.md` (clear rules, XML structure, examples) next to a deliberately weak `system.bad.md`; scores recorded (bad 3/10, good 10/10)
 
 Acceptance: `pnpm eval` runs end to end; at least one prompt revision with a documented score change.
 
