@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { LlmProvider } from '@chatbot/api/src/modules/llm/llm-provider';
+import type { EvalLlm } from './eval-llm';
 import { gradeCase } from './grade';
 
-const llm = (score: number): LlmProvider => ({
-  complete: async () => '',
+const llm = (score: number): EvalLlm => ({
   completeJson: async (_request, schema) => schema.parse({ score, reasoning: 'r' }),
-  stream: async function* () {},
 });
 
 const run = (reply: string) => ({ case: { id: 'a-1', category: 'a', input: 'hi', criteria: ['c'] }, reply });

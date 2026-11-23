@@ -17,8 +17,7 @@ score change. This is a demo: keep everything as simple as possible.
   - `pnpm eval` and `pnpm eval:dataset`.
   - Before/after scores recorded in Notes below.
 - Out (explicitly deferred): retrieval/tool cases (Phases 4–5), CI, score
-  thresholds, UI for results, multi-turn cases, per-category reports,
-  stronger-judge-model setup.
+  thresholds, UI for results, multi-turn cases, per-category reports.
 
 ## Design
 
@@ -58,7 +57,7 @@ Case shape (single-turn only):
 
 ### Pipeline
 1. **Generate** (`pnpm eval:dataset`): model returns cases as JSON, zod-validated, written to `dataset.json`.
-2. **Run** (`pnpm eval`): `NestFactory.createApplicationContext(AppModule)`, take the `LlmProvider` (it owns the system prompt) and call `complete()` per case with just the user message; no conversations, no streaming.
+2. **Run** (`pnpm eval`): `NestFactory.createApplicationContext(AppModule)`, take the `LlmProvider` (it owns the system prompt) and collect its `stream()` text deltas per case with just the user message; no conversations.
 3. **Grade** (all scores are 0–10): 3 code checks, each exactly 0 or 10, averaged; plus one judge call per case (model sees input, reply and the criteria as a rubric; returns an integer 0–10 and reasoning, schema-validated). Case score = rounded mean of the code score and the judge score.
 4. **Report**: console shows only the score per case and the average (0–10, rounded). The saved `apps/evals/results/<timestamp>.json` has the details (replies, judge reasoning, code checks) for whoever wants to dig in.
 
@@ -67,7 +66,7 @@ Case shape (single-turn only):
 - `apps/api`: export what `apps/evals` needs to boot the app context (minimal).
 - `apps/evals` (new, covered by existing `apps/*` workspace glob): `src/generate-dataset.ts`, `src/run.ts`, `src/graders.ts`, `dataset.json`, `results/`.
 - Root `package.json`: `eval`, `eval:dataset` scripts.
-- SDK rule: `apps/evals` does not import `@anthropic-ai/sdk`. Generator and judge call the model through the `LlmProvider` from the app context; same model for everything (Haiku constant in `modules/llm`). Small `LlmRequest` extension only if the judge/generator truly need it.
+- SDK rule: the generator and judge use the eval's own provider `apps/evals/src/eval-llm.ts` (`EvalLlm` + `AnthropicEvalLlm`), the only place outside `LlmModule` that imports `@anthropic-ai/sdk`. Model is hardcoded Sonnet, one level above the chat's Haiku. `LlmProvider` is not changed for evals.
 
 ### Contracts / API / UI / Config
 - None changed. Uses existing `ANTHROPIC_API_KEY`. `pnpm eval` makes real API calls; it is never part of `pnpm test`.
@@ -79,7 +78,7 @@ Case shape (single-turn only):
 1. `prompts/system.md`; `AnthropicLlmProvider` loads it; unit test.
 2. `apps/evals` skeleton + scripts; green typecheck/lint.
 3. Dataset generator; generate, skim, commit `dataset.json`.
-4. Runner on `LlmProvider.complete()`.
+4. Runner on `LlmProvider.stream()`.
 5. Code graders (unit tests, no network) and judge (unit test with a stub provider).
 6. Report.
 7. Good and bad prompt side by side; run both and record the scores.

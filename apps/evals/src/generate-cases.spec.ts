@@ -1,15 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { LlmProvider } from '@chatbot/api/src/modules/llm/llm-provider';
 import { GeneratedSchema } from './dataset';
+import type { EvalLlm } from './eval-llm';
 import { generateCases } from './generate-cases';
 
-function stub(generated: unknown): LlmProvider {
-  return {
-    complete: async () => '',
-    completeJson: async (_request, schema) => schema.parse(generated),
-    stream: async function* () {},
-  };
-}
+const stub = (generated: unknown): EvalLlm => ({ completeJson: async (_request, schema) => schema.parse(generated) });
 
 describe('generateCases', () => {
   it('adds ids and categories to the generated cases', async () => {

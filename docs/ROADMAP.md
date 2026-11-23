@@ -56,7 +56,7 @@ Acceptance
 **Goal:** measure and improve the system prompt instead of guessing.
 
 Scope
-- `apps/evals` workspace: dataset generation with a fast model, runner calling the real `LlmProvider`, which owns the system prompt (Nest application context), model-based and code-based graders
+- `apps/evals` workspace: dataset generation and model judge on the eval's own Sonnet provider, runner calling the real `LlmProvider`, which owns the system prompt (Nest application context), code-based graders
 - report (score per case + average) saved to `apps/evals/results/` and printed
 - `prompts/system.md` (clear rules, XML structure, examples) next to a deliberately weak `system.bad.md`; scores recorded (bad 3/10, good 10/10)
 

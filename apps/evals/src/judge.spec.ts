@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { LlmProvider } from '@chatbot/api/src/modules/llm/llm-provider';
+import type { EvalLlm } from './eval-llm';
 import { judge } from './judge';
 import type { RunResult } from './runner';
 
@@ -8,16 +8,12 @@ const result: RunResult = {
   reply: 'I went home. OK?',
 };
 
-function stub(verdict: unknown, seen: string[] = []): LlmProvider {
-  return {
-    complete: async () => '',
-    completeJson: async (request, schema) => {
-      seen.push(request.system ?? '');
-      return schema.parse(verdict);
-    },
-    stream: async function* () {},
-  };
-}
+const stub = (verdict: unknown, seen: string[] = []): EvalLlm => ({
+  completeJson: async (request, schema) => {
+    seen.push(request.system);
+    return schema.parse(verdict);
+  },
+});
 
 describe('judge', () => {
   it('puts input, reply and criteria into the prompt and returns the verdict', async () => {

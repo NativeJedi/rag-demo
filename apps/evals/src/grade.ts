@@ -1,5 +1,5 @@
-import type { LlmProvider } from '@chatbot/api/src/modules/llm/llm-provider';
 import { type CodeCheck, codeChecks, codeScore } from './code-graders';
+import type { EvalLlm } from './eval-llm';
 import { type JudgeVerdict, judge } from './judge';
 import type { RunResult } from './runner';
 
@@ -12,7 +12,7 @@ export interface CaseReport {
   code: { score: number; checks: CodeCheck[] };
 }
 
-export async function gradeCase(llm: LlmProvider, judgePrompt: string, result: RunResult): Promise<CaseReport> {
+export async function gradeCase(llm: EvalLlm, judgePrompt: string, result: RunResult): Promise<CaseReport> {
   const checks = codeChecks(result.reply);
   const verdict = await judge(llm, judgePrompt, result);
   const code = codeScore(checks);
