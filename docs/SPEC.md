@@ -236,7 +236,7 @@ demonstrated. Two columns, always visible.
   under an interrupted reply; the error banner next to the partial text.
 - **Composer**: textarea, Enter to send / Shift+Enter newline, one button that is
   Send or Stop.
-- Empty state: two sample prompts that send on click (the default reply and `/error`).
+- Empty state: two sample prompts that send on click (a sentence with a mistake to correct, and a question in Ukrainian), matching the English-tutor prompt.
 
 ### 9.2 Structure
 

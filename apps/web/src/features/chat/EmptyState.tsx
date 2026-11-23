@@ -1,6 +1,6 @@
 const SAMPLES = [
-  { text: 'Hello! Show me some markdown', hint: 'Formatted reply' },
-  { text: 'Explain streaming in one paragraph', hint: 'Short answer' },
+  { text: 'I have went to the cinema yesterday.', hint: 'Fix my mistake' },
+  { text: 'Як англійською сказати "я дуже втомився"?', hint: 'Ask in Ukrainian' },
 ];
 
 export function EmptyState({ onPick }: { onPick: (text: string) => void }) {

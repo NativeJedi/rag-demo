@@ -67,13 +67,15 @@ Acceptance: `pnpm eval` runs end to end; at least one prompt revision with a doc
 **Goal:** the assistant can act.
 
 Scope
-- `Message.content` grows into `blocks: Block[]` (text + tool_use + tool_result), across shared, `ChatService`, the web reducer and the message list in one change
-- tool definitions (zod → JSON schema) and executor; loop in `ChatService`: call → run tool → send `tool_result` → repeat until the model stops
-- tools: current datetime, add duration to date, reminders (create/list), batch tool (several calls in one turn)
-- built-in tools: web search; text editor tool over a sandboxed `data/notes/` dir
-- UI renders tool calls and results as cards
+- server-side history in blocks (text + tool_use + tool_result); the web keeps plain text
+- tool definitions (zod → JSON schema) and executor; loop in `ChatService`: call → run tools → send `tool_result` → repeat until the model stops
+- parallel tool calls: all `tool_use` of one response run concurrently (replaces a separate batch tool)
+- vocabulary dictionary stored in a JSON file (`DICTIONARY_FILE`) with tools: `get_current_datetime`, `find_words(words[])`, `add_words(entries[])`, `list_words`
+- tool calls are logged on the server; no tool UI (workflow visibility comes in Phase 7)
+- developed on its own branch `feat/phase-04-tool-use`, in five reviewable commits
+- out of scope for now: built-in tools (text editor, web search); next small case after this phase: paste a link, get hard words with translations (server-side web fetch)
 
-Acceptance: multi-step tool use renders as cards; a tool error is returned to the model as an error result and shown in the UI.
+Acceptance: multi-step tool use (parallel calls, then a dependent call) completes with a final text reply; a tool error is returned to the model as an error result.
 
 ## Phase 5 — Retrieval augmented generation ⬜
 **Course:** RAG — text chunking, embeddings, hybrid search with BM25, multi-index architectures, reranking, contextual retrieval.
