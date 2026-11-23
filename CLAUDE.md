@@ -22,8 +22,8 @@ React + Tailwind web, shared zod contracts.
   unused schema fields or dead UI branches for later phases. Delete, don't park.
 - Contracts live only in packages/shared. Changing ChatEvent means updating
   shared, AnthropicLlmProvider mapping and the web chatReducer together.
-- Only LlmModule imports @anthropic-ai/sdk. Model IDs only as constants inside modules/llm (AnthropicLlmProvider).
-- Prompts live in apps/api/prompts/*.md, never inline.
+- Only LlmModule imports @anthropic-ai/sdk, plus the evals' own provider (apps/evals/src/llm/eval-llm.ts). Model IDs only as constants inside those two providers.
+- Prompts live in apps/api/prompts/*.md (eval prompts: apps/evals/prompts/*.md), never inline.
 - Unit tests never hit the network; use the fake provider in apps/api/src/test-app.ts or a stub SDK client.
 - No `any`. Prefer small, readable code over abstractions not needed yet.
 - Check https://docs.claude.com before using an SDK/API feature; SDK names

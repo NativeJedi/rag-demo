@@ -10,6 +10,8 @@
     "typecheck": "pnpm -r --parallel typecheck",
     "test": "pnpm -r test",
     "lint": "eslint .",
+    "eval": "pnpm --filter @chatbot/evals start",
+    "eval:dataset": "pnpm --filter @chatbot/evals dataset",
     "format": "prettier --write ."
   },
   "devDependencies": {
