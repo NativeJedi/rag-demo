@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { CaseReport } from './grade';
+import type { CaseReport, EvalRun } from './evaluator';
 
 export interface Report {
   createdAt: string;
@@ -8,12 +8,11 @@ export interface Report {
   prompt: string;
   /** 0–10, rounded. */
   average: number;
-  /** Full detail per case (judge reasoning, code checks, replies) for whoever wants to dig in. */
-  cases: (CaseReport & { reply: string })[];
+  /** Full detail per case (evaluations with their reasoning and checks, replies) for whoever wants to dig in. */
+  cases: CaseReport[];
 }
 
-export function buildReport(prompt: string, cases: Report['cases'], now = new Date()): Report {
-  const average = cases.length === 0 ? 0 : Math.round(cases.reduce((sum, c) => sum + c.score, 0) / cases.length);
+export function buildReport(prompt: string, { average, cases }: EvalRun, now = new Date()): Report {
   return { createdAt: now.toISOString(), prompt, average, cases };
 }
 

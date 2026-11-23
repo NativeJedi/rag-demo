@@ -15,7 +15,7 @@ function setup(sdkEvents: object[], stopReason: string = 'end_turn') {
       finalMessage: async () => ({ stop_reason: stopReason }),
     }),
   );
-  const provider = new AnthropicLlmProvider({ ANTHROPIC_API_KEY: 'test-key' } as AppConfig);
+  const provider = new AnthropicLlmProvider({ ANTHROPIC_API_KEY: 'test-key', SYSTEM_PROMPT_FILE: 'system.md' } as AppConfig);
   const run = async (messages: LlmMessage[] = [{ role: 'user', content: 'hi' }]) => {
     const events: ChatEvent[] = [];
     for await (const e of provider.stream({ messages }, new AbortController().signal)) events.push(e);

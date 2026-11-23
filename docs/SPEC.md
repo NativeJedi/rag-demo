@@ -54,7 +54,7 @@ chatbot/
 | Language | TypeScript 5.9, `strict: true` | no `any`; `unknown` + narrowing. Not 7.x: typescript-eslint supports `<6.1` |
 | API | NestJS 11 (Express adapter), CommonJS | Nest CLI with SWC builder |
 | Validation | zod + `nestjs-zod` | DTOs created from shared schemas |
-| LLM | `@anthropic-ai/sdk` | only inside `LlmModule` and the evals' own provider (`apps/evals/src/eval-llm.ts`) |
+| LLM | `@anthropic-ai/sdk` | only inside `LlmModule` and the evals' own provider (`apps/evals/src/llm/eval-llm.ts`) |
 | Frontend | React 19, Vite 7, Tailwind CSS v4 (`@tailwindcss/vite`) | class-based dark mode (`.dark`) |
 | Server state (web) | TanStack Query | REST resources |
 | Stream state (web) | `useReducer` over `ChatEvent` | single reducer, see §6 |
@@ -213,11 +213,12 @@ exactly what is stored.
 PORT=3000
 WEB_ORIGIN=http://localhost:5173
 ANTHROPIC_API_KEY=
+SYSTEM_PROMPT_FILE=system.md   # optional: a file in apps/api/prompts/ (evals use it to compare prompts)
 ```
 
 Config is validated at boot; the app fails fast with a readable message.
 `ANTHROPIC_API_KEY` is required.
-Model IDs are constants inside `AnthropicLlmProvider` (chat) and `apps/evals/src/eval-llm.ts` (evals), never literals elsewhere.
+Model IDs are constants inside `AnthropicLlmProvider` (chat) and `apps/evals/src/llm/eval-llm.ts` (evals), never literals elsewhere.
 
 ## 9. Frontend (apps/web)
 
@@ -265,7 +266,7 @@ every event type in the union (exhaustive `switch` with `never` check).
   unused schema fields or dead UI branches for later phases. The roadmap is the
   plan; the code is what works.
 - Shared contracts live in `packages/shared`; never duplicate a schema.
-- Only `LlmModule` and the evals' own provider (`apps/evals/src/eval-llm.ts`) import `@anthropic-ai/sdk`.
+- Only `LlmModule` and the evals' own provider (`apps/evals/src/llm/eval-llm.ts`) import `@anthropic-ai/sdk`.
 - Prompts live in `apps/api/prompts/*.md` (eval prompts in `apps/evals/prompts/*.md`), loaded at runtime, never inlined in code.
 - Every new endpoint: zod DTO, controller test, entry in §5 table.
 - Tests use the fake provider in `test-app.ts` or a stub SDK client; no network in unit tests. Live API tests are
@@ -289,20 +290,27 @@ every event type in the union (exhaustive `switch` with `never` check).
 A CLI, not part of the API build. It boots the API's Nest application context from
 source (`@chatbot/api/src/*`, run with `@swc-node/register` so decorator metadata
 works) and takes `LlmProvider` from it: that is the chat under test. Dataset generation
-and judging go through the eval's own provider (`eval-llm.ts`, `EvalLlm`), which calls the
+and judging go through the eval's own provider (`llm/eval-llm.ts`, `EvalLlm`), which calls the
 SDK directly with a hardcoded Sonnet model, one level above the chat's Haiku.
 
 - `dataset.json`: ~15 single-turn cases (`id`, `category`, `input`, `criteria`),
   generated once by `pnpm eval:dataset` and committed.
-- Runner: `LlmProvider.stream()` per case with only the user message, text deltas
+- Layout: two entry points in `src/` (`generate-dataset.ts` → `DatasetGenerator`,
+  `run-eval.ts` → `Evaluator`) that only wire dependencies and do file I/O; the rest is
+  modules `llm/` (`EvalLlm`), `utils/` (env loading, prompt templates), `dataset/` (`Case` contract, file,
+  generator) and `evaluation/` (evaluator, `ModelEval`, `CodeEval`, report). Dependencies
+  point one way: `evaluation` → `dataset` → `llm`; `utils/` is used by any of them.
+- Evaluator: `LlmProvider.stream()` per case with only the user message, text deltas
   collected into the reply; the provider's system prompt (`prompts/system.md`) is what is being tested. A provider error
   aborts the run.
-- Grading, all 0–10: three code checks (≤120 words, ends with a question, no filler
-  opener), each exactly 0 or 10 and averaged; one model judge call per case
-  (`EvalLlm.completeJson`, criteria as rubric, integer 0–10 + reasoning). Case score =
-  rounded mean of the two; dataset score = rounded mean of cases.
+- Grading, all 0–10: `Evaluator` keeps a list of `CaseEval`s (`evaluate(case, reply)` →
+  `{ name, score, details }`) and runs each on every reply. `CodeEval`: three checks (≤120
+  words, ends with a question, no filler opener), each exactly 0 or 10 and averaged.
+  `ModelEval`: one judge call per case (`EvalLlm.completeJson`, criteria as rubric,
+  integer 0–10 + reasoning). Case score = rounded mean of the evaluations; the average is
+  computed inside `Evaluator` as the rounded mean of the case scores.
 - Output: console shows scores only; `results/<timestamp>.json` (git-ignored) has
-  replies, judge reasoning and code checks.
+  replies and every evaluation's details (judge reasoning, code checks).
 - Prompts for the generator and judge live in `apps/evals/prompts/`.
 - `EvalLlm.completeJson()` is schema-constrained via `output_config.format`;
   `LlmProvider` itself is unchanged by evals.

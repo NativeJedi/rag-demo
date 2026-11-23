@@ -1,17 +1,18 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadDotEnv } from './env';
-import { AnthropicEvalLlm } from './eval-llm';
-import { generateCases } from './generate-cases';
+import { DATASET_FILE, saveDataset } from './dataset/dataset-file';
+import { DatasetGenerator } from './dataset/dataset-generator';
+import { AnthropicEvalLlm } from './llm/eval-llm';
+import { loadDotEnv } from './utils/load-env';
 
-const promptPath = join(__dirname, '..', 'prompts', 'generate-dataset.md');
+const PROMPT_FILE = join(__dirname, '..', 'prompts', 'generate-dataset.md');
 
 async function main(): Promise<void> {
   loadDotEnv();
-  const cases = await generateCases(new AnthropicEvalLlm(), readFileSync(promptPath, 'utf8'));
-  const out = join(__dirname, '..', 'dataset.json');
-  writeFileSync(out, `${JSON.stringify(cases, null, 2)}\n`);
-  console.log(`Wrote ${cases.length} cases to ${out}`);
+  const generator = new DatasetGenerator(new AnthropicEvalLlm(), readFileSync(PROMPT_FILE, 'utf8'));
+  const cases = await generator.generate();
+  saveDataset(cases);
+  console.log(`Wrote ${cases.length} cases to ${DATASET_FILE}`);
 }
 
 main().catch((err: unknown) => {

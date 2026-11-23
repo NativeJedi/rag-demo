@@ -8,20 +8,22 @@ import type { LlmProvider, LlmRequest } from '../llm-provider';
 
 const MODEL = 'claude-haiku-5-5';
 const MAX_TOKENS = 4096;
-// same depth from src/ and dist/: apps/api/prompts/system.md
-const SYSTEM_PROMPT = readFileSync(join(__dirname, '..', '..', '..', '..', 'prompts', 'system.md'), 'utf8').trim();
+// same depth from src/ and dist/: apps/api/prompts/
+const PROMPTS_DIR = join(__dirname, '..', '..', '..', '..', 'prompts');
 
 @Injectable()
 export class AnthropicLlmProvider implements LlmProvider {
   private readonly client: Anthropic;
+  private readonly systemPrompt: string;
 
   constructor(@Inject(APP_CONFIG) config: AppConfig) {
     this.client = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY });
+    this.systemPrompt = readFileSync(join(PROMPTS_DIR, config.SYSTEM_PROMPT_FILE), 'utf8').trim();
   }
 
   async *stream(request: LlmRequest, signal: AbortSignal): AsyncGenerator<ChatEvent> {
     const stream = this.client.messages.stream(
-      { model: MODEL, max_tokens: MAX_TOKENS, messages: request.messages, system: SYSTEM_PROMPT },
+      { model: MODEL, max_tokens: MAX_TOKENS, messages: request.messages, system: this.systemPrompt },
       { signal },
     );
     let stopReason: StopReason;

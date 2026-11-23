@@ -4,6 +4,8 @@ export const EnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   WEB_ORIGIN: z.string().default('http://localhost:5173'),
   ANTHROPIC_API_KEY: z.string().min(1),
+  /** File name inside apps/api/prompts/ used as the chat system prompt (evals set it to compare prompts). */
+  SYSTEM_PROMPT_FILE: z.string().default('system.md'),
 });
 
 export type AppConfig = z.infer<typeof EnvSchema>;

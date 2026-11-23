@@ -9,8 +9,3 @@ export const CaseSchema = z.object({
 export type Case = z.infer<typeof CaseSchema>;
 
 export const DatasetSchema = z.array(CaseSchema);
-
-/** What the generator asks the model for (ids and category are added in code). */
-export const GeneratedSchema = z.object({
-  cases: z.array(z.object({ input: z.string(), criteria: z.array(z.string()) })),
-});

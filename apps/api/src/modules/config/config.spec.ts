@@ -7,6 +7,7 @@ describe('loadConfig', () => {
       PORT: 3000,
       WEB_ORIGIN: 'http://localhost:5173',
       ANTHROPIC_API_KEY: 'k',
+      SYSTEM_PROMPT_FILE: 'system.md',
     });
   });
 

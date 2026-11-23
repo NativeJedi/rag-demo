@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "start": "node -r @swc-node/register src/run.ts",
+    "start": "node -r @swc-node/register src/run-eval.ts",
     "typecheck": "tsc --noEmit",
     "dataset": "node -r @swc-node/register src/generate-dataset.ts",
     "test": "vitest run"

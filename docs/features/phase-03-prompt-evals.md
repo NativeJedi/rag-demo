@@ -58,15 +58,15 @@ Case shape (single-turn only):
 ### Pipeline
 1. **Generate** (`pnpm eval:dataset`): model returns cases as JSON, zod-validated, written to `dataset.json`.
 2. **Run** (`pnpm eval`): `NestFactory.createApplicationContext(AppModule)`, take the `LlmProvider` (it owns the system prompt) and collect its `stream()` text deltas per case with just the user message; no conversations.
-3. **Grade** (all scores are 0–10): 3 code checks, each exactly 0 or 10, averaged; plus one judge call per case (model sees input, reply and the criteria as a rubric; returns an integer 0–10 and reasoning, schema-validated). Case score = rounded mean of the code score and the judge score.
+3. **Grade** (all scores are 0–10): 3 code checks, each exactly 0 or 10, averaged; plus one judge call per case (model sees input, reply and the criteria as a rubric; returns an integer 0–10 and reasoning, schema-validated). Both are `CaseEval`s (`CodeEval`, `ModelEval`) in the `Evaluator`'s list; case score = rounded mean of their scores, and `Evaluator` computes the dataset average.
 4. **Report**: console shows only the score per case and the average (0–10, rounded). The saved `apps/evals/results/<timestamp>.json` has the details (replies, judge reasoning, code checks) for whoever wants to dig in.
 
 ### Modules/files touched
 - `apps/api/prompts/system.md` (new); loaded at runtime by `AnthropicLlmProvider`.
 - `apps/api`: export what `apps/evals` needs to boot the app context (minimal).
-- `apps/evals` (new, covered by existing `apps/*` workspace glob): `src/generate-dataset.ts`, `src/run.ts`, `src/graders.ts`, `dataset.json`, `results/`.
+- `apps/evals` (new, covered by existing `apps/*` workspace glob): entry points `src/generate-dataset.ts` and `src/run-eval.ts`; modules `src/llm/`, `src/utils/`, `src/dataset/`, `src/evaluation/`; `dataset.json`, `results/`.
 - Root `package.json`: `eval`, `eval:dataset` scripts.
-- SDK rule: the generator and judge use the eval's own provider `apps/evals/src/eval-llm.ts` (`EvalLlm` + `AnthropicEvalLlm`), the only place outside `LlmModule` that imports `@anthropic-ai/sdk`. Model is hardcoded Sonnet, one level above the chat's Haiku. `LlmProvider` is not changed for evals.
+- SDK rule: the generator and judge use the eval's own provider `apps/evals/src/llm/eval-llm.ts` (`EvalLlm` + `AnthropicEvalLlm`), the only place outside `LlmModule` that imports `@anthropic-ai/sdk`. Model is hardcoded Sonnet, one level above the chat's Haiku. `LlmProvider` is not changed for evals.
 
 ### Contracts / API / UI / Config
 - None changed. Uses existing `ANTHROPIC_API_KEY`. `pnpm eval` makes real API calls; it is never part of `pnpm test`.
