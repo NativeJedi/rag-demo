@@ -6,9 +6,10 @@ import { ChatModule } from './modules/chat/chat.module';
 import { ConfigModule } from './modules/config/config.module';
 import { ConversationsModule } from './modules/conversations/conversations.module';
 import { LlmModule } from './modules/llm/llm.module';
+import { ToolsModule } from './modules/tools/tools.module';
 
 @Module({
-  imports: [ConfigModule, LlmModule, ConversationsModule, ChatModule],
+  imports: [ConfigModule, LlmModule, ConversationsModule, ToolsModule, ChatModule],
   providers: [
     { provide: APP_PIPE, useClass: ZodValidationPipe },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

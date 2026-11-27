@@ -17,7 +17,7 @@ the author works through Anthropic's "Building with the Claude API" course
 builds only what the section teaches (see `ROADMAP.md`).
 
 End state: streaming multi-turn chat with a system prompt and structured
-output, an eval suite for the prompt, tool use, a personal knowledge base
+output, an eval suite for the prompt, tool use (a vocabulary dictionary), a personal knowledge base
 (hybrid RAG with reranking), MCP integration (own docs server), and
 workflow/agent patterns (chaining, parallelization, routing).
 
@@ -62,7 +62,7 @@ chatbot/
 | Shared pkg | source-only (`exports` → `src/index.ts`), no build step | relative imports use `.ts` so Node 22.18+ can load it at runtime |
 | Tests | Vitest everywhere (api via `unplugin-swc`), per-package config | Testing Library + jsdom on web |
 | Lint/format | ESLint 9 flat config + Prettier at root | `no-explicit-any` is an error |
-| Storage | in-memory maps inside `ConversationsService` | |
+| Storage | in-memory maps inside `ConversationsService`; the vocabulary dictionary is a JSON file | |
 
 ## 4. Backend architecture (apps/api)
 
@@ -73,7 +73,8 @@ Global prefix `/api`. Modules that exist today:
 | `ConfigModule` | load `.env`, validate with zod, typed `AppConfig` |
 | `LlmModule` | `LlmProvider` interface + `AnthropicLlmProvider` |
 | `ConversationsModule` | conversations and their messages (in memory) |
-| `ChatModule` | `ChatService`: runs one turn, emits `ChatEvent`s over SSE |
+| `ToolsModule` | `ToolsService` (tool definitions, parallel execution of tool calls, logging) and `DictionaryService` (JSON file) |
+| `ChatModule` | `ChatService`: runs one turn and its tool loop, emits `ChatEvent`s over SSE |
 
 Later phases add their own modules (tools, knowledge, MCP, workflows) when they are built — see `ROADMAP.md`.
 
@@ -81,7 +82,7 @@ Later phases add their own modules (tools, knowledge, MCP, workflows) when they 
 
 ```ts
 interface LlmProvider {
-  stream(request: LlmRequest, signal: AbortSignal): AsyncIterable<ChatEvent>;
+  stream(request: LlmRequest, signal: AbortSignal): AsyncIterable<LlmEvent>;
 }
 ```
 
@@ -90,8 +91,12 @@ interface LlmProvider {
   `client.messages.stream` (fixed `max_tokens`, model constant in `anthropic-llm.provider.ts`) and maps
   text deltas and the stop reason to `ChatEvent`s. Errors are thrown and turned into
   an `error` event by `ChatService`.
-- `LlmRequest` is our domain shape: `{ messages: { role, content }[] }`.
-  The system prompt comes from `prompts/system.md` (phase 2).
+- `LlmRequest` is our domain shape: `{ messages: { role, content: ContentBlock[] }[], tools? }`.
+  `ContentBlock` is `text`, `tool_use` or `tool_result`, shaped like the Messages API.
+  The system prompt comes from `prompts/system.md`.
+- `LlmEvent` is `ChatEvent` without `message_start`, plus `{ type: 'tool_use', blocks }`:
+  a response that ends in `tool_use` finishes with that event (all calls of the response)
+  instead of `message_done`. `LlmEvent` is api-internal; `ChatEvent` is unchanged.
 
 ### 4.2 ChatService turn lifecycle
 
@@ -101,9 +106,35 @@ reads top to bottom:
 1. Load the conversation (throws → 404), snapshot the history, append the user
    message. The first message sets a truncated title.
 2. Emit `message_start` with the id the assistant message will be persisted
-   under, then forward every provider event, accumulating the text.
+   under, then loop (at most 8 model calls, else an `error` event `tool_loop_limit`):
+   stream the model, forwarding `text_delta`s and accumulating the text. If the response
+   ends in `tool_use`, run all its calls concurrently with `ToolsService.runAll`, store
+   the assistant message (text + `tool_use` blocks) together with a user message of
+   `tool_result` blocks (same order as the calls), and call the model again. The client
+   sees one stream: one `message_start`, all text deltas, one final `message_done`.
 3. Persist in a `finally`, so a Stop or an error still keeps whatever the model
-   managed to say.
+   managed to say. Tool calls are stored only together with their results, so a turn
+   stopped mid-tool round leaves a history the API accepts.
+
+### 4.3 Tools
+
+`ToolsService` holds four tools — `{ name, description, input_schema, run }`, the schema
+made from a zod schema with `z.toJSONSchema`. `run` validates the raw input itself;
+invalid input, an unknown tool or a thrown error becomes a `tool_result` with `is_error: true`
+and a readable message, so the model can retry. Every call and its result or error is logged.
+
+| Tool | Input | Result |
+|---|---|---|
+| `get_current_datetime` | none | `{ iso, date }` (UTC) |
+| `find_words` | `{ words: string[] }` | `{ found: Entry[], missing: string[] }` |
+| `add_words` | `{ entries: Entry[] }` | `{ added: string[], skipped: { word, reason }[] }` (a duplicate is skipped, not an error) |
+| `list_words` | none | `{ entries: Entry[] }`, newest first |
+
+`DictionaryService` keeps one global dictionary in a JSON array (`DICTIONARY_FILE`): loaded on
+first use (a missing file is empty, a corrupt one fails and is not overwritten), rewritten
+via a temp file after every `add_words` that added something; writes are chained, so parallel
+adds do not lose entries. The prompt (`<tools>` in `system.md`) teaches the flow:
+`get_current_datetime` + `find_words` in parallel, then `add_words` with today's date.
 
 Because `@Sse` holds the headers until the first event, the throw in step 1 still
 reaches the exception filter and comes back as a JSON 404, not a stream.
@@ -190,22 +221,25 @@ the connection, which the server treats as Stop.
 | `error` | `code, message` |
 
 Adding an event type is a deliberate, four-place change: the union in `shared`,
-the mock provider, the real provider's mapping and the web `chatReducer` — in
-one commit. Phase 4 (tool use) brings its own tool events.
+the real provider's mapping and the web `chatReducer` — in
+one commit. Tool calls are not events: the web does not see them (workflow visibility is phase 7).
 
 ## 7. Data model (domain, storage-agnostic)
 
 ```ts
 Conversation { id, title, createdAt, updatedAt }
 Message { id, conversationId, role: "user" | "assistant", content: string, stopReason?, createdAt }
+Entry { word, translation, example?, addedAt }   // dictionary, `word` lowercased is the key
 ```
 
 IDs are prefixed ULIDs (`conv_`, `msg_`).
 
-Message content is plain text. The Messages API is block-based, and this model
-will grow into `blocks: Block[]` when the first non-text block appears — tool
-calls in phase 4. Until then a string says
-exactly what is stored.
+`Message` (the web's view) is plain text. The server stores messages as `ContentBlock[]`
+(`StoredMessage`, api-internal, see §4.1) because tool calls need `tool_use` and `tool_result`
+blocks in the history. `GET /api/conversations/:id` maps them to `Message`: messages made only of
+`tool_result` blocks are skipped, `tool_use` blocks are dropped, consecutive assistant messages
+(one tool turn) are merged into one — text concatenated, id of the first — so the streamed text
+equals what `GET` returns.
 
 ## 8. Configuration (.env)
 
@@ -214,6 +248,7 @@ PORT=3000
 WEB_ORIGIN=http://localhost:5173
 ANTHROPIC_API_KEY=
 SYSTEM_PROMPT_FILE=system.md   # optional: a file in apps/api/prompts/ (evals use it to compare prompts)
+DICTIONARY_FILE=data/dictionary.json   # optional: relative paths resolve from apps/api; git-ignored
 ```
 
 Config is validated at boot; the app fails fast with a readable message.

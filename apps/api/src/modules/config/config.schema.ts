@@ -6,6 +6,8 @@ export const EnvSchema = z.object({
   ANTHROPIC_API_KEY: z.string().min(1),
   /** File name inside apps/api/prompts/ used as the chat system prompt (evals set it to compare prompts). */
   SYSTEM_PROMPT_FILE: z.string().default('system.md'),
+  /** Vocabulary dictionary JSON file; a relative path is resolved from apps/api. */
+  DICTIONARY_FILE: z.string().default('data/dictionary.json'),
 });
 
 export type AppConfig = z.infer<typeof EnvSchema>;

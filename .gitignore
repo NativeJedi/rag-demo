@@ -5,3 +5,4 @@ coverage
 .DS_Store
 *.tsbuildinfo
 apps/evals/results/
+apps/api/data/

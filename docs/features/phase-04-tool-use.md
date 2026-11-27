@@ -1,6 +1,6 @@
 # Phase 04 — Tool use with Claude
 
-Status: draft
+Status: done
 Branch: `feat/phase-04-tool-use` (the whole feature lives there; nothing lands on `main` until it is reviewed)
 Course lessons: Tool use with Claude (function calling, multi-turn tool interactions, parallel tool calls, tool errors)
 Roadmap: docs/ROADMAP.md#phase-4--tool-use-with-claude-
@@ -69,14 +69,14 @@ Conversations stay in memory; only the dictionary is persisted.
   stores messages as `blocks` and `LlmRequest` carries them. These types are api-internal; `packages/shared` does not change.
 - `GET /api/conversations/:id` maps stored messages to the existing `Message { content: string }`:
   messages made only of `tool_result` blocks are skipped, consecutive assistant messages are merged
-  into one (their text joined with a blank line, id of the first), `tool_use` blocks are dropped.
+  into one (their text concatenated, id of the first), `tool_use` blocks are dropped.
 - `LlmProvider.stream` gets two api-internal changes: its output type carries the stop reason
   `tool_use` and the response's `tool_use` blocks. `ChatEvent` is unchanged.
 
 ### Loop (`ChatService`)
 - One SSE stream per user message, with one `message_start` and one final `message_done`.
-  Intermediate model calls emit only `text_delta`s; between iterations the loop streams a `"\n\n"`
-  delta so the streamed text equals the merged text that `GET` returns.
+  Intermediate model calls emit only `text_delta`s, forwarded untouched; `GET` concatenates the text of
+  the merged messages the same way, so the streamed text equals what `GET` returns by construction.
 - Per iteration: stream the model → collect `tool_use` blocks → run them with `Promise.all`
   (each logged) → append the assistant message and a user message with the `tool_result` blocks, in
   the order of the `tool_use` blocks → next iteration. The loop ends when the stop reason is not `tool_use`.
@@ -118,17 +118,17 @@ and small enough to review on its own.
 5. **Prompt and docs.** `<tools>` section in `system.md`, `pnpm eval` re-run, SPEC.md and ROADMAP.md updated, hand test with the real API.
 
 ## Acceptance criteria
-- [ ] "Add ephemeral and lucid" ends with a text reply and both words in `list_words`; the server log shows `get_current_datetime` and `find_words` ran in parallel, then `add_words` with today's date
-- [ ] A second request for the same word reports it as skipped
-- [ ] Added words survive an API restart; a missing file is an empty dictionary, a corrupt one is a clear error and is not overwritten
-- [ ] A tool error (e.g. invalid date) is returned to the model as an error result (covered by a test with the fake provider)
-- [ ] Parallel execution is covered by a test (both calls start before either finishes)
-- [ ] Stop mid-loop leaves a history the next message can continue from
-- [ ] After a tool turn `GET` returns one merged assistant message, with no tool blocks
-- [ ] Tool and loop tests run without network (fake provider / stub SDK)
-- [ ] `pnpm eval` score unchanged by the prompt change
-- [ ] typecheck, test, lint green
-- [ ] SPEC.md and ROADMAP.md updated; capability flag flipped if applicable
+- [x] "Add ephemeral and lucid" ends with a text reply and both words in `list_words`; the server log shows `get_current_datetime` and `find_words` ran in parallel, then `add_words` with today's date
+- [x] A second request for the same word reports it as skipped
+- [x] Added words survive an API restart; a missing file is an empty dictionary, a corrupt one is a clear error and is not overwritten
+- [x] A tool error (e.g. invalid date) is returned to the model as an error result (covered by a test with the fake provider)
+- [x] Parallel execution is covered by a test (both calls start before either finishes)
+- [x] Stop mid-loop leaves a history the next message can continue from
+- [x] After a tool turn `GET` returns one merged assistant message, with no tool blocks
+- [x] Tool and loop tests run without network (fake provider / stub SDK)
+- [x] `pnpm eval` score unchanged by the prompt change
+- [x] typecheck, test, lint green
+- [x] SPEC.md and ROADMAP.md updated; capability flag flipped if applicable
 
 ## Notes / decisions
 - Domain: the dictionary reuses the English-tutor persona from Phase 3 and gives every tool a reason to exist.
@@ -137,3 +137,5 @@ and small enough to review on its own.
 - `add_words` takes an array (bulk parameter) instead of one call per word.
 - No cards in the UI: the web is not touched in this phase, which removes new `ChatEvent` types, reducer cases and a component. The price is that tool activity is only visible in logs and tests.
 - Text editor and web search are out of scope for now.
+- Eval after the `<tools>` section: average 10/10, the same as before (single cases vary by ±1 between runs; `grammar-3` and `mistakes-3` were 9 even without the section). A first, longer version with a numbered list dropped `grammar-3` to 5–6 (the correction came after the explanation), so the section was shortened and the list removed.
+- Hand test with the real API: "Add ephemeral and lucid" → `get_current_datetime` + `find_words` in parallel, then one `add_words` with today's date; "Add lucid and ubiquitous" → lucid reported as already saved, ubiquitous added; `GET` returns one merged assistant message per turn.
