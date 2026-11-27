@@ -62,7 +62,7 @@ Scope
 
 Acceptance: `pnpm eval` runs end to end; at least one prompt revision with a documented score change.
 
-## Phase 4 — Tool use with Claude ⬜
+## Phase 4 — Tool use with Claude ✅
 **Course:** Tool use with Claude — function calling, multi-turn tool interactions, batch tool calling, built-in tools.
 **Goal:** the assistant can act.
 
@@ -75,7 +75,7 @@ Scope
 - developed on its own branch `feat/phase-04-tool-use`, in five reviewable commits
 - out of scope for now: built-in tools (text editor, web search); next small case after this phase: paste a link, get hard words with translations (server-side web fetch)
 
-Acceptance: multi-step tool use (parallel calls, then a dependent call) completes with a final text reply; a tool error is returned to the model as an error result.
+Acceptance: ✅ multi-step tool use (parallel calls, then a dependent call) completes with a final text reply; a tool error is returned to the model as an error result.
 
 ## Phase 5 — Retrieval augmented generation ⬜
 **Course:** RAG — text chunking, embeddings, hybrid search with BM25, multi-index architectures, reranking, contextual retrieval.
