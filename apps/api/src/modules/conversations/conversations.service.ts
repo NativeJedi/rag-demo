@@ -7,14 +7,23 @@ import type {
   Message,
 } from '@chatbot/shared';
 import { newId } from '../../common/ids';
+import type { ContentBlock } from '../llm/llm-provider';
 
 export const DEFAULT_TITLE = 'New chat';
+
+/** What the server keeps: content as blocks. The web only ever sees `Message` (plain text). */
+export type StoredMessage = Omit<Message, 'content'> & { blocks: ContentBlock[] };
+
+function toMessage({ blocks, ...rest }: StoredMessage): Message {
+  const content = blocks.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('');
+  return { ...rest, content };
+}
 
 /** In-memory store; SQLite (Drizzle) replaces the two maps in phase 3. */
 @Injectable()
 export class ConversationsService {
   private readonly conversations = new Map<string, Conversation>();
-  private readonly messages = new Map<string, Message[]>();
+  private readonly messages = new Map<string, StoredMessage[]>();
 
   list(): ConversationSummary[] {
     return [...this.conversations.values()]
@@ -42,7 +51,7 @@ export class ConversationsService {
   }
 
   getWithMessages(id: string): ConversationWithMessages {
-    return { ...this.getOrThrow(id), messages: this.listMessages(id) };
+    return { ...this.getOrThrow(id), messages: this.listMessages(id).map(toMessage) };
   }
 
   remove(id: string): void {
@@ -52,12 +61,12 @@ export class ConversationsService {
   }
 
   /** A snapshot: callers must not see later appends through the array they got. */
-  listMessages(conversationId: string): Message[] {
+  listMessages(conversationId: string): StoredMessage[] {
     return [...(this.messages.get(conversationId) ?? [])];
   }
 
   /** Appends a message and bumps the conversation's updatedAt. */
-  appendMessage(message: Message): void {
+  appendMessage(message: StoredMessage): void {
     const conversation = this.getOrThrow(message.conversationId);
     this.messages.get(conversation.id)?.push(message);
     this.conversations.set(conversation.id, { ...conversation, updatedAt: new Date().toISOString() });

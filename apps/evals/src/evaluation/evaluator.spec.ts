@@ -10,7 +10,7 @@ const testCase = (id: string, input = 'hi'): Case => ({ id, category: 'x', input
 /** Chat stub: the events to stream per input; throws for inputs it does not know. */
 const chat = (eventsByInput: Record<string, ChatEvent[]>): LlmProvider => ({
   stream: async function* (request) {
-    const events = eventsByInput[request.messages[0]?.content ?? ''];
+    const events = eventsByInput[request.messages[0]?.content.map((b) => (b.type === 'text' ? b.text : '')).join('') ?? ''];
     if (!events) throw new Error('provider down');
     yield* events;
   },

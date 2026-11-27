@@ -9,7 +9,8 @@ import { LLM_PROVIDER, type LlmProvider } from './modules/llm/llm-provider';
 function fakeLlm(delayMs: number): LlmProvider {
   return {
     async *stream(request, signal) {
-      const input = request.messages.at(-1)?.content ?? '';
+      const last = request.messages.at(-1)?.content[0];
+      const input = last?.type === 'text' ? last.text : '';
       for (const word of `You said: ${input}`.split(/(?<=\s)/)) {
         if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
         if (signal.aborted) return;

@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { ChatEvent, SendMessageDto, StopReason } from '@chatbot/shared';
 import { newId } from '../../common/ids';
 import { ConversationsService, DEFAULT_TITLE } from '../conversations/conversations.service';
-import { LLM_PROVIDER, type LlmProvider } from '../llm/llm-provider';
+import { LLM_PROVIDER, type LlmMessage, type LlmProvider } from '../llm/llm-provider';
 
 @Injectable()
 export class ChatService {
@@ -24,7 +24,7 @@ export class ChatService {
       id: newId('msg'),
       conversationId,
       role: 'user',
-      content: dto.content,
+      blocks: [{ type: 'text', text: dto.content }],
       createdAt: new Date().toISOString(),
     });
     if (history.length === 0 && conversation.title === DEFAULT_TITLE) {
@@ -33,10 +33,10 @@ export class ChatService {
     }
 
     const messageId = newId('msg');
-    const messages = [...history, { role: 'user' as const, content: dto.content }].map(({ role, content }) => ({
-      role,
-      content,
-    }));
+    const messages: LlmMessage[] = [
+      ...history.map(({ role, blocks }) => ({ role, content: blocks })),
+      { role: 'user', content: [{ type: 'text', text: dto.content }] },
+    ];
 
     let text = '';
     let stopReason: StopReason | undefined;
@@ -64,7 +64,7 @@ export class ChatService {
           id: messageId,
           conversationId,
           role: 'assistant',
-          content: text,
+          blocks: [{ type: 'text', text }],
           ...(stopReason && { stopReason }),
           createdAt: new Date().toISOString(),
         });

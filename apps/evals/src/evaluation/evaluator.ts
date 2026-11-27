@@ -56,7 +56,7 @@ export class Evaluator {
 
   /** The chat's whole reply to one user message, collected from its stream (the provider owns the system prompt). */
   private async replyTo(input: string): Promise<string> {
-    const request = { messages: [{ role: 'user' as const, content: input }] };
+    const request = { messages: [{ role: 'user' as const, content: [{ type: 'text' as const, text: input }] }] };
     let reply = '';
     for await (const event of this.chat.stream(request, new AbortController().signal)) {
       if (event.type === 'text_delta') reply += event.text;

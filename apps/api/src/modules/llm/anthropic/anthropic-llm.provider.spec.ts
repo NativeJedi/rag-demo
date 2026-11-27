@@ -16,7 +16,7 @@ function setup(sdkEvents: object[], stopReason: string = 'end_turn') {
     }),
   );
   const provider = new AnthropicLlmProvider({ ANTHROPIC_API_KEY: 'test-key', SYSTEM_PROMPT_FILE: 'system.md' } as AppConfig);
-  const run = async (messages: LlmMessage[] = [{ role: 'user', content: 'hi' }]) => {
+  const run = async (messages: LlmMessage[] = [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }]) => {
     const events: ChatEvent[] = [];
     for await (const e of provider.stream({ messages }, new AbortController().signal)) events.push(e);
     return events;
@@ -44,9 +44,9 @@ describe('AnthropicLlmProvider', () => {
   it('sends the whole history with the configured model', async () => {
     const { run, stream } = setup([]);
     const messages = [
-      { role: 'user' as const, content: 'a' },
-      { role: 'assistant' as const, content: 'b' },
-      { role: 'user' as const, content: 'c' },
+      { role: 'user' as const, content: [{ type: 'text' as const, text: 'a' }] },
+      { role: 'assistant' as const, content: [{ type: 'text' as const, text: 'b' }] },
+      { role: 'user' as const, content: [{ type: 'text' as const, text: 'c' }] },
     ];
     await run(messages);
     expect(stream).toHaveBeenCalledWith(expect.objectContaining({ model: 'claude-haiku-5-5', messages }), expect.anything());
