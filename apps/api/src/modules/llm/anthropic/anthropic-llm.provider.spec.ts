@@ -62,10 +62,10 @@ describe('AnthropicLlmProvider', () => {
     expect(stream).toHaveBeenCalledWith(expect.objectContaining({ system: prompt }), expect.anything());
   });
 
-  it('sends tool definitions in the SDK shape', async () => {
+  it('sends tool definitions as they are', async () => {
     const { run, stream } = setup([]);
     await run(undefined, {
-      tools: [{ name: 'find_words', description: 'd', inputSchema: { properties: { words: { type: 'array' } }, required: ['words'] } }],
+      tools: [{ name: 'find_words', description: 'd', input_schema: { type: 'object', properties: { words: { type: 'array' } }, required: ['words'] } }],
     });
     expect(stream).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -87,12 +87,12 @@ describe('AnthropicLlmProvider', () => {
     expect(stream.mock.calls.at(-1)?.[0]).not.toHaveProperty('tools');
   });
 
-  it('maps tool_use and tool_result blocks of the history', async () => {
+  it('sends tool_use and tool_result blocks of the history as they are', async () => {
     const { run, stream } = setup([]);
     await run([
       { role: 'user', content: [{ type: 'text', text: 'add lucid' }] },
       { role: 'assistant', content: [{ type: 'tool_use', id: 't1', name: 'find_words', input: { words: ['lucid'] } }] },
-      { role: 'user', content: [{ type: 'tool_result', toolUseId: 't1', content: '{}', isError: true }] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: '{}', is_error: true }] },
     ]);
     expect(stream.mock.calls.at(-1)?.[0].messages.slice(1)).toEqual([
       { role: 'assistant', content: [{ type: 'tool_use', id: 't1', name: 'find_words', input: { words: ['lucid'] } }] },

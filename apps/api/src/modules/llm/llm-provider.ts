@@ -11,12 +11,12 @@ export interface ToolUseBlock {
 
 export interface ToolResultBlock {
   type: 'tool_result';
-  toolUseId: string;
+  tool_use_id: string;
   content: string;
-  isError: boolean;
+  is_error: boolean;
 }
 
-/** A piece of a message. */
+/** A piece of a message. Block and tool shapes follow the Messages API, so the provider passes them through. */
 export type ContentBlock = { type: 'text'; text: string } | ToolUseBlock | ToolResultBlock;
 
 export interface LlmMessage {
@@ -28,7 +28,7 @@ export interface LlmMessage {
 export interface ToolDefinition {
   name: string;
   description: string;
-  inputSchema: Record<string, unknown>;
+  input_schema: { type: 'object'; [key: string]: unknown };
 }
 
 /** Our domain request shape. SDK mapping stays inside the provider that needs it. */

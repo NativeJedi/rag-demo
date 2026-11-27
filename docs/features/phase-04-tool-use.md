@@ -69,14 +69,14 @@ Conversations stay in memory; only the dictionary is persisted.
   stores messages as `blocks` and `LlmRequest` carries them. These types are api-internal; `packages/shared` does not change.
 - `GET /api/conversations/:id` maps stored messages to the existing `Message { content: string }`:
   messages made only of `tool_result` blocks are skipped, consecutive assistant messages are merged
-  into one (their text joined with a blank line, id of the first), `tool_use` blocks are dropped.
+  into one (their text concatenated, id of the first), `tool_use` blocks are dropped.
 - `LlmProvider.stream` gets two api-internal changes: its output type carries the stop reason
   `tool_use` and the response's `tool_use` blocks. `ChatEvent` is unchanged.
 
 ### Loop (`ChatService`)
 - One SSE stream per user message, with one `message_start` and one final `message_done`.
-  Intermediate model calls emit only `text_delta`s; between iterations the loop streams a `"\n\n"`
-  delta so the streamed text equals the merged text that `GET` returns.
+  Intermediate model calls emit only `text_delta`s, forwarded untouched; `GET` concatenates the text of
+  the merged messages the same way, so the streamed text equals what `GET` returns by construction.
 - Per iteration: stream the model → collect `tool_use` blocks → run them with `Promise.all`
   (each logged) → append the assistant message and a user message with the `tool_result` blocks, in
   the order of the `tool_use` blocks → next iteration. The loop ends when the stop reason is not `tool_use`.

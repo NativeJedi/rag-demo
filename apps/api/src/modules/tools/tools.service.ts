@@ -1,66 +1,85 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
-import { DictionaryService } from './dictionary.service';
-import { createDictionaryTools } from './dictionary.tools';
-import { getCurrentDatetime } from './get-current-datetime.tool';
-import type { ToolDefinition } from '../llm/llm-provider';
-import type { Tool } from './tool';
+import { DictionaryService, EntrySchema } from './dictionary.service';
+import type { ToolDefinition, ToolResultBlock, ToolUseBlock } from '../llm/llm-provider';
 
-export interface ToolCall {
-  id: string;
-  name: string;
-  input: unknown;
-}
+const FindWordsInput = z.object({ words: z.array(z.string().min(1)).min(1) });
+const AddWordsInput = z.object({ entries: z.array(EntrySchema).min(1) });
+const NoInput = z.object({});
 
-export interface ToolResult {
-  toolUseId: string;
-  /** JSON text for a result, a readable message for an error. */
-  content: string;
-  isError: boolean;
+/** What the API is told about a tool, plus the code that runs its `tool_use`. `run` validates the raw input itself. */
+interface Tool extends ToolDefinition {
+  run(input: unknown): unknown;
 }
 
 /** The assistant's tools: what the API is told about them, and running the model's calls. */
 @Injectable()
 export class ToolsService {
   private readonly logger = new Logger(ToolsService.name);
-  private readonly byName: Map<string, Tool>;
 
-  constructor(dictionary: DictionaryService) {
-    const tools = [getCurrentDatetime, ...createDictionaryTools(dictionary)];
-    this.byName = new Map(tools.map((tool) => [tool.name, tool]));
-  }
+  private readonly tools: Tool[] = [
+    {
+      name: 'get_current_datetime',
+      description: 'Returns the current server date and time in UTC. Use it whenever you need today\'s date.',
+      input_schema: inputSchema(NoInput),
+      run: () => {
+        const iso = new Date().toISOString();
+        return { iso, date: iso.slice(0, 10) };
+      },
+    },
+    {
+      name: 'find_words',
+      description: 'Checks which of the given words are already in the user\'s vocabulary dictionary. Returns the stored entries and the words that are missing.',
+      input_schema: inputSchema(FindWordsInput),
+      run: (input) => this.dictionary.find(FindWordsInput.parse(input).words),
+    },
+    {
+      name: 'add_words',
+      description: 'Saves new words to the vocabulary dictionary. `translation` is Ukrainian, `addedAt` is today\'s date (YYYY-MM-DD, from get_current_datetime). Words already in the dictionary are reported as skipped.',
+      input_schema: inputSchema(AddWordsInput),
+      run: (input) => this.dictionary.add(AddWordsInput.parse(input).entries),
+    },
+    {
+      name: 'list_words',
+      description: 'Lists every word in the vocabulary dictionary, newest first.',
+      input_schema: inputSchema(NoInput),
+      run: async () => ({ entries: await this.dictionary.list() }),
+    },
+  ];
 
+  constructor(private readonly dictionary: DictionaryService) {}
+
+  /** Sent to the API as `tools`; the model answers with `tool_use { name, input }`. */
   definitions(): ToolDefinition[] {
-    return [...this.byName.values()].map(({ name, description, input }) => {
-      const { $schema, ...inputSchema } = z.toJSONSchema(input);
-      void $schema;
-      return { name, description, inputSchema };
-    });
+    return this.tools.map(({ name, description, input_schema }) => ({ name, description, input_schema }));
   }
 
   /** Runs all calls of one model response concurrently; results keep the order of `calls`. Never rejects. */
-  runAll(calls: ToolCall[]): Promise<ToolResult[]> {
+  runAll(calls: ToolUseBlock[]): Promise<ToolResultBlock[]> {
     return Promise.all(calls.map((call) => this.run(call)));
   }
 
-  private async run({ id, name, input }: ToolCall): Promise<ToolResult> {
+  /** One `tool_use` block in, one `tool_result` block out: JSON text on success, a readable message on error. */
+  private async run({ id, name, input }: ToolUseBlock): Promise<ToolResultBlock> {
     this.logger.log(`call ${name} ${JSON.stringify(input)}`);
-    const tool = this.byName.get(name);
-    if (!tool) return this.fail(id, name, `Unknown tool: ${name}`);
     try {
-      const content = JSON.stringify((await tool.execute(input)) ?? null);
+      const tool = this.tools.find((t) => t.name === name);
+      if (!tool) throw new Error(`Unknown tool: ${name}`);
+      const content = JSON.stringify((await tool.run(input)) ?? null);
       this.logger.log(`result ${name} ${content}`);
-      return { toolUseId: id, content, isError: false };
+      return { type: 'tool_result', tool_use_id: id, content, is_error: false };
     } catch (err) {
-      const message = err instanceof z.ZodError ? `Invalid input: ${z.prettifyError(err)}` : errorMessage(err);
-      return this.fail(id, name, message);
+      const content = err instanceof z.ZodError ? `Invalid input: ${z.prettifyError(err)}` : errorMessage(err);
+      this.logger.warn(`error ${name} ${content}`);
+      return { type: 'tool_result', tool_use_id: id, content, is_error: true };
     }
   }
+}
 
-  private fail(toolUseId: string, name: string, message: string): ToolResult {
-    this.logger.warn(`error ${name} ${message}`);
-    return { toolUseId, content: message, isError: true };
-  }
+function inputSchema(schema: z.ZodType): ToolDefinition['input_schema'] {
+  const { $schema, ...rest } = z.toJSONSchema(schema);
+  void $schema;
+  return { ...rest, type: 'object' };
 }
 
 function errorMessage(err: unknown): string {

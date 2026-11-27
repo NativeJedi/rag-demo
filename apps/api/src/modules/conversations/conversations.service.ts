@@ -7,32 +7,35 @@ import type {
   Message,
 } from '@chatbot/shared';
 import { newId } from '../../common/ids';
-import type { ContentBlock } from '../llm/llm-provider';
+import type { LlmMessage } from '../llm/llm-provider';
 
 export const DEFAULT_TITLE = 'New chat';
 
 /** What the server keeps: content as blocks. The web only ever sees `Message` (plain text). */
-export type StoredMessage = Omit<Message, 'content'> & { blocks: ContentBlock[] };
+export type StoredMessage = Omit<Message, 'content'> & LlmMessage;
 
-function toMessage({ blocks, ...rest }: StoredMessage): Message {
+/** A message to store: the service adds `conversationId` and `createdAt`, and an `id` unless one is given. */
+export type NewMessage = Pick<StoredMessage, 'role' | 'content' | 'stopReason'> & { id?: string };
+
+function toMessage({ content: blocks, ...rest }: StoredMessage): Message {
   const content = blocks.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('');
   return { ...rest, content };
 }
 
 /**
  * The web sees plain text: tool_result messages are skipped, tool_use blocks are dropped and the
- * assistant messages of one tool turn are merged into one (text joined with a blank line, id of the first).
+ * assistant messages of one tool turn are merged into one (their text concatenated, id of the first).
  */
 function toMessages(stored: StoredMessage[]): Message[] {
   const out: Message[] = [];
   for (const m of stored) {
-    if (m.blocks.length > 0 && m.blocks.every((b) => b.type === 'tool_result')) continue;
+    if (m.content.length > 0 && m.content.every((b) => b.type === 'tool_result')) continue;
     const message = toMessage(m);
     const prev = out.at(-1);
     if (m.role === 'assistant' && prev?.role === 'assistant') {
       out[out.length - 1] = {
         ...prev,
-        content: [prev.content, message.content].filter(Boolean).join('\n\n'),
+        content: prev.content + message.content,
         ...(message.stopReason ? { stopReason: message.stopReason } : {}),
       };
     } else {
@@ -88,11 +91,15 @@ export class ConversationsService {
     return [...(this.messages.get(conversationId) ?? [])];
   }
 
-  /** Appends a message and bumps the conversation's updatedAt. */
-  appendMessage(message: StoredMessage): void {
-    const conversation = this.getOrThrow(message.conversationId);
-    this.messages.get(conversation.id)?.push(message);
-    this.conversations.set(conversation.id, { ...conversation, updatedAt: new Date().toISOString() });
+  /**
+   * Appends a message, filling in `conversationId` and `createdAt`, and bumps the conversation's updatedAt.
+   * The id is generated unless the caller already announced one (the assistant's id goes out in `message_start`).
+   */
+  appendMessage(conversationId: string, { id, ...message }: NewMessage): void {
+    const conversation = this.getOrThrow(conversationId);
+    const now = new Date().toISOString();
+    this.messages.get(conversationId)?.push({ ...message, id: id ?? newId('msg'), conversationId, createdAt: now });
+    this.conversations.set(conversationId, { ...conversation, updatedAt: now });
   }
 
   setTitle(id: string, title: string): void {

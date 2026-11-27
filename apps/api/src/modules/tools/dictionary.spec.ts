@@ -76,11 +76,11 @@ describe('dictionary tools', () => {
 
   it('add_words → find_words → list_words round trip', async () => {
     const run = setup();
-    const [added] = await run.runAll([{ id: '1', name: 'add_words', input: { entries: [entry('lucid')] } }]);
-    expect(added).toMatchObject({ isError: false, content: '{"added":["lucid"],"skipped":[]}' });
+    const [added] = await run.runAll([{ type: 'tool_use' as const, id: '1', name: 'add_words', input: { entries: [entry('lucid')] } }]);
+    expect(added).toMatchObject({ is_error: false, content: '{"added":["lucid"],"skipped":[]}' });
     const [found, listed] = await run.runAll([
-      { id: '2', name: 'find_words', input: { words: ['lucid', 'x'] } },
-      { id: '3', name: 'list_words', input: {} },
+      { type: 'tool_use' as const, id: '2', name: 'find_words', input: { words: ['lucid', 'x'] } },
+      { type: 'tool_use' as const, id: '3', name: 'list_words', input: {} },
     ]);
     expect(JSON.parse(found?.content ?? '')).toMatchObject({ missing: ['x'] });
     expect(JSON.parse(listed?.content ?? '').entries).toHaveLength(1);
@@ -88,10 +88,10 @@ describe('dictionary tools', () => {
 
   it('returns an error result for a bad date or empty words', async () => {
     const results = await setup().runAll([
-      { id: '1', name: 'add_words', input: { entries: [entry('x', 'yesterday')] } },
-      { id: '2', name: 'find_words', input: { words: [] } },
+      { type: 'tool_use' as const, id: '1', name: 'add_words', input: { entries: [entry('x', 'yesterday')] } },
+      { type: 'tool_use' as const, id: '2', name: 'find_words', input: { words: [] } },
     ]);
-    expect(results.map((r) => r.isError)).toEqual([true, true]);
+    expect(results.map((r) => r.is_error)).toEqual([true, true]);
     expect(results[0]?.content).toMatch(/^Invalid input/);
   });
 });

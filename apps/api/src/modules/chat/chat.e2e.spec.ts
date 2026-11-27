@@ -85,6 +85,32 @@ describe('POST /conversations/:id/messages (SSE)', () => {
     await http().post(`/api/conversations/${id}/messages`).send({ content: '' }).expect(400);
   });
 
+  it('stores no assistant message when Stop comes before the first word', async () => {
+    const slow = await createTestApp(100);
+    const slowHttp = () => request(slow.getHttpServer());
+    const id = (await slowHttp().post('/api/conversations').send({})).body.id as string;
+    const server = slow.getHttpServer().listen(0);
+    const { port } = server.address() as { port: number };
+    const ac = new AbortController();
+    const res = await fetch(`http://127.0.0.1:${port}/api/conversations/${id}/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content: 'tell me something long' }),
+      signal: ac.signal,
+    });
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let seen = '';
+    while (!seen.includes('event: message_start')) seen += decoder.decode((await reader.read()).value);
+    ac.abort();
+    await reader.read().catch(() => undefined);
+    await new Promise((r) => setTimeout(r, 300)); // the first word would have come after 100 ms
+
+    const conv = (await slowHttp().get(`/api/conversations/${id}`)).body as ConversationWithMessages;
+    expect(conv.messages.map((m) => m.role)).toEqual(['user']);
+    await slow.close();
+  });
+
   it('stops the provider on client disconnect and stores the partial reply as aborted', async () => {
     const slow = await createTestApp(5);
     const slowHttp = () => request(slow.getHttpServer());

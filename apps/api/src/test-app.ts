@@ -16,7 +16,7 @@ const isToolResult = (b: Block | undefined): b is Extract<Block, { type: 'tool_r
 function assertToolCallsAnswered(messages: LlmRequest['messages']): void {
   messages.forEach((m, i) => {
     const calls = m.content.filter((b) => b.type === 'tool_use').map((b) => b.id);
-    const answered = new Set(messages[i + 1]?.content.filter(isToolResult).map((b) => b.toolUseId));
+    const answered = new Set(messages[i + 1]?.content.filter(isToolResult).map((b) => b.tool_use_id));
     if (calls.some((id) => !answered.has(id))) throw new Error('tool_use without tool_result');
   });
 }

@@ -4,7 +4,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { Inject, Injectable } from '@nestjs/common';
 import type { StopReason } from '@chatbot/shared';
 import { APP_CONFIG, type AppConfig } from '../../config/config.module';
-import type { ContentBlock, LlmEvent, LlmMessage, LlmProvider, LlmRequest, ToolDefinition } from '../llm-provider';
+import type { LlmEvent, LlmProvider, LlmRequest } from '../llm-provider';
 
 const MODEL = 'claude-haiku-5-5';
 const MAX_TOKENS = 4096;
@@ -26,9 +26,9 @@ export class AnthropicLlmProvider implements LlmProvider {
       {
         model: MODEL,
         max_tokens: MAX_TOKENS,
-        messages: request.messages.map(toSdkMessage),
+        messages: request.messages,
         system: this.systemPrompt,
-        ...(request.tools?.length && { tools: request.tools.map(toSdkTool) }),
+        ...(request.tools?.length && { tools: request.tools }),
       },
       { signal },
     );
@@ -54,23 +54,4 @@ export class AnthropicLlmProvider implements LlmProvider {
     }
     yield { type: 'message_done', stopReason };
   }
-}
-
-function toSdkMessage({ role, content }: LlmMessage): Anthropic.MessageParam {
-  return { role, content: content.map(toSdkBlock) };
-}
-
-function toSdkBlock(block: ContentBlock): Anthropic.ContentBlockParam {
-  switch (block.type) {
-    case 'text':
-      return block;
-    case 'tool_use':
-      return block;
-    case 'tool_result':
-      return { type: 'tool_result', tool_use_id: block.toolUseId, content: block.content, is_error: block.isError };
-  }
-}
-
-function toSdkTool({ name, description, inputSchema }: ToolDefinition): Anthropic.Tool {
-  return { name, description, input_schema: { ...inputSchema, type: 'object' } };
 }
