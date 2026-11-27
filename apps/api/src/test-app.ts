@@ -1,3 +1,6 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AppModule } from './app.module';
@@ -27,7 +30,7 @@ function fakeLlm(delayMs: number): LlmProvider {
 export async function createTestApp(delayMs = 0): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(APP_CONFIG)
-    .useValue(loadConfig({ ANTHROPIC_API_KEY: 'test' }))
+    .useValue(loadConfig({ ANTHROPIC_API_KEY: 'test', DICTIONARY_FILE: join(mkdtempSync(join(tmpdir(), 'dict-')), 'dictionary.json') }))
     .overrideProvider(LLM_PROVIDER)
     .useValue(fakeLlm(delayMs))
     .compile();
