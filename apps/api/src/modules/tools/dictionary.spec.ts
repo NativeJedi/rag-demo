@@ -3,10 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { AppConfig } from '../config/config.module';
-import { createDictionaryTools } from './dictionary.tools';
 import { DictionaryService } from './dictionary.service';
-import { ToolExecutor } from './tool-executor';
-import { ToolRegistry } from './tool-registry';
+import { ToolsService } from './tools.service';
 
 let file: string;
 const service = () => new DictionaryService({ DICTIONARY_FILE: file } as AppConfig);
@@ -74,7 +72,7 @@ describe('DictionaryService', () => {
 });
 
 describe('dictionary tools', () => {
-  const setup = () => new ToolExecutor(new ToolRegistry(createDictionaryTools(service())));
+  const setup = () => new ToolsService(service());
 
   it('add_words → find_words → list_words round trip', async () => {
     const run = setup();

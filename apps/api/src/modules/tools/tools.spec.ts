@@ -1,52 +1,45 @@
 import { describe, expect, it } from 'vitest';
-import { z } from 'zod';
+import type { DictionaryService } from './dictionary.service';
 import { getCurrentDatetime } from './get-current-datetime.tool';
-import { defineTool } from './tool';
-import { ToolExecutor } from './tool-executor';
-import { ToolRegistry } from './tool-registry';
+import { ToolsService } from './tools.service';
 
-const echo = defineTool({
-  name: 'echo',
-  description: 'Echoes words',
-  input: z.object({ words: z.array(z.string()).min(1) }),
-  run: ({ words }) => ({ words }),
-});
-const boom = defineTool({ name: 'boom', description: 'Always fails', input: z.object({}), run: () => { throw new Error('kaboom'); } });
+const stub = (overrides: Partial<DictionaryService> = {}) => new ToolsService(overrides as DictionaryService);
 
-describe('ToolRegistry', () => {
+describe('ToolsService.definitions', () => {
+  const definitions = stub().definitions();
+
+  it('exposes all four tools', () => {
+    expect(definitions.map((d) => d.name)).toEqual(['get_current_datetime', 'find_words', 'add_words', 'list_words']);
+  });
+
   it('turns zod schemas into JSON-schema definitions', () => {
-    const [def] = new ToolRegistry([echo]).definitions();
-    expect(def).toEqual({
-      name: 'echo',
-      description: 'Echoes words',
-      inputSchema: {
-        type: 'object',
-        properties: { words: { type: 'array', minItems: 1, items: { type: 'string' } } },
-        required: ['words'],
-        additionalProperties: false,
-      },
+    expect(definitions.find((d) => d.name === 'find_words')?.inputSchema).toEqual({
+      type: 'object',
+      properties: { words: { type: 'array', minItems: 1, items: { type: 'string', minLength: 1 } } },
+      required: ['words'],
+      additionalProperties: false,
     });
   });
-
-  it('rejects duplicate names', () => {
-    expect(() => new ToolRegistry([echo, echo])).toThrow(/Duplicate/);
-  });
 });
 
-describe('ToolExecutor', () => {
-  const executor = new ToolExecutor(new ToolRegistry([echo, boom, getCurrentDatetime]));
-
+describe('ToolsService.runAll', () => {
   it('runs a tool and returns JSON', async () => {
-    expect(await executor.runAll([{ id: 't1', name: 'echo', input: { words: ['a'] } }])).toEqual([
-      { toolUseId: 't1', content: '{"words":["a"]}', isError: false },
+    const tools = stub({ find: async () => ({ found: [], missing: ['a'] }) });
+    expect(await tools.runAll([{ id: 't1', name: 'find_words', input: { words: ['a'] } }])).toEqual([
+      { toolUseId: 't1', content: '{"found":[],"missing":["a"]}', isError: false },
     ]);
   });
 
   it('turns invalid input, unknown tools and thrown errors into error results', async () => {
-    const results = await executor.runAll([
-      { id: 't1', name: 'echo', input: { words: [] } },
+    const tools = stub({
+      list: async () => {
+        throw new Error('kaboom');
+      },
+    });
+    const results = await tools.runAll([
+      { id: 't1', name: 'find_words', input: { words: [] } },
       { id: 't2', name: 'nope', input: {} },
-      { id: 't3', name: 'boom', input: {} },
+      { id: 't3', name: 'list_words', input: {} },
     ]);
     expect(results.map((r) => r.isError)).toEqual([true, true, true]);
     expect(results[0]?.content).toMatch(/^Invalid input/);
@@ -58,23 +51,19 @@ describe('ToolExecutor', () => {
     const log: string[] = [];
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
-    const slow = defineTool({
-      name: 'slow',
-      description: 's',
-      input: z.object({ n: z.number() }),
-      run: async ({ n }) => {
-        log.push(`start ${n}`);
+    const tools = stub({
+      find: async ([word]) => {
+        log.push(`start ${word}`);
         await gate;
-        log.push(`end ${n}`);
-        return n;
+        return { found: [], missing: [] };
       },
     });
-    const pending = new ToolExecutor(new ToolRegistry([slow])).runAll([
-      { id: 'a', name: 'slow', input: { n: 1 } },
-      { id: 'b', name: 'slow', input: { n: 2 } },
+    const pending = tools.runAll([
+      { id: 'a', name: 'find_words', input: { words: ['one'] } },
+      { id: 'b', name: 'find_words', input: { words: ['two'] } },
     ]);
     await new Promise((r) => setTimeout(r, 0));
-    expect(log).toEqual(['start 1', 'start 2']); // both started before either finished
+    expect(log).toEqual(['start one', 'start two']); // both started before either finished
     release();
     expect((await pending).map((r) => r.toolUseId)).toEqual(['a', 'b']);
   });

@@ -1,6 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
-import { ToolRegistry } from './tool-registry';
+import { DictionaryService } from './dictionary.service';
+import { createDictionaryTools } from './dictionary.tools';
+import { getCurrentDatetime } from './get-current-datetime.tool';
+import type { Tool } from './tool';
+
+/** Tool definition in the shape the Messages API wants. */
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
 
 export interface ToolCall {
   id: string;
@@ -15,11 +25,24 @@ export interface ToolResult {
   isError: boolean;
 }
 
+/** The assistant's tools: what the API is told about them, and running the model's calls. */
 @Injectable()
-export class ToolExecutor {
-  private readonly logger = new Logger(ToolExecutor.name);
+export class ToolsService {
+  private readonly logger = new Logger(ToolsService.name);
+  private readonly byName: Map<string, Tool>;
 
-  constructor(private readonly registry: ToolRegistry) {}
+  constructor(dictionary: DictionaryService) {
+    const tools = [getCurrentDatetime, ...createDictionaryTools(dictionary)];
+    this.byName = new Map(tools.map((tool) => [tool.name, tool]));
+  }
+
+  definitions(): ToolDefinition[] {
+    return [...this.byName.values()].map(({ name, description, input }) => {
+      const { $schema, ...inputSchema } = z.toJSONSchema(input);
+      void $schema;
+      return { name, description, inputSchema };
+    });
+  }
 
   /** Runs all calls of one model response concurrently; results keep the order of `calls`. Never rejects. */
   runAll(calls: ToolCall[]): Promise<ToolResult[]> {
@@ -28,7 +51,7 @@ export class ToolExecutor {
 
   private async run({ id, name, input }: ToolCall): Promise<ToolResult> {
     this.logger.log(`call ${name} ${JSON.stringify(input)}`);
-    const tool = this.registry.get(name);
+    const tool = this.byName.get(name);
     if (!tool) return this.fail(id, name, `Unknown tool: ${name}`);
     try {
       const content = JSON.stringify((await tool.execute(input)) ?? null);
