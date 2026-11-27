@@ -3,14 +3,8 @@ import { z } from 'zod';
 import { DictionaryService } from './dictionary.service';
 import { createDictionaryTools } from './dictionary.tools';
 import { getCurrentDatetime } from './get-current-datetime.tool';
+import type { ToolDefinition } from '../llm/llm-provider';
 import type { Tool } from './tool';
-
-/** Tool definition in the shape the Messages API wants. */
-export interface ToolDefinition {
-  name: string;
-  description: string;
-  inputSchema: Record<string, unknown>;
-}
 
 export interface ToolCall {
   id: string;

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { LlmProvider } from '@chatbot/api/src/modules/llm/llm-provider';
-import type { ChatEvent } from '@chatbot/shared';
+import type { LlmEvent, LlmProvider } from '@chatbot/api/src/modules/llm/llm-provider';
 import type { Case } from '../dataset/case';
 import type { EvalLlm } from '../llm/eval-llm';
 import { Evaluator } from './evaluator';
@@ -8,7 +7,7 @@ import { Evaluator } from './evaluator';
 const testCase = (id: string, input = 'hi'): Case => ({ id, category: 'x', input, criteria: ['c'] });
 
 /** Chat stub: the events to stream per input; throws for inputs it does not know. */
-const chat = (eventsByInput: Record<string, ChatEvent[]>): LlmProvider => ({
+const chat = (eventsByInput: Record<string, LlmEvent[]>): LlmProvider => ({
   stream: async function* (request) {
     const events = eventsByInput[request.messages[0]?.content.map((b) => (b.type === 'text' ? b.text : '')).join('') ?? ''];
     if (!events) throw new Error('provider down');
@@ -16,7 +15,7 @@ const chat = (eventsByInput: Record<string, ChatEvent[]>): LlmProvider => ({
   },
 });
 
-const textReply = (text: string): ChatEvent[] => [
+const textReply = (text: string): LlmEvent[] => [
   { type: 'text_delta', text },
   { type: 'message_done', stopReason: 'end_turn' },
 ];
@@ -25,11 +24,11 @@ const judge = (score: number): EvalLlm => ({
   completeJson: async (_request, schema) => schema.parse({ score, reasoning: 'r' }),
 });
 
-const evaluator = (events: Record<string, ChatEvent[]>, judgeScore = 10) => new Evaluator(chat(events), judge(judgeScore), '');
+const evaluator = (events: Record<string, LlmEvent[]>, judgeScore = 10) => new Evaluator(chat(events), judge(judgeScore), '');
 
 describe('Evaluator', () => {
   it('joins the text deltas into the reply', async () => {
-    const events: ChatEvent[] = [
+    const events: LlmEvent[] = [
       { type: 'text_delta', text: 'Nice. Ready ' },
       { type: 'text_delta', text: 'for more?' },
       { type: 'message_done', stopReason: 'end_turn' },
@@ -59,7 +58,7 @@ describe('Evaluator', () => {
   });
 
   it('aborts on an error event', async () => {
-    const events: ChatEvent[] = [{ type: 'error', code: 'provider_error', message: 'down' }];
+    const events: LlmEvent[] = [{ type: 'error', code: 'provider_error', message: 'down' }];
     await expect(evaluator({ hi: events }).evaluate([testCase('a-1')])).rejects.toThrow('down');
   });
 

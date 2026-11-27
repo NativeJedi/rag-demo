@@ -19,6 +19,29 @@ function toMessage({ blocks, ...rest }: StoredMessage): Message {
   return { ...rest, content };
 }
 
+/**
+ * The web sees plain text: tool_result messages are skipped, tool_use blocks are dropped and the
+ * assistant messages of one tool turn are merged into one (text joined with a blank line, id of the first).
+ */
+function toMessages(stored: StoredMessage[]): Message[] {
+  const out: Message[] = [];
+  for (const m of stored) {
+    if (m.blocks.length > 0 && m.blocks.every((b) => b.type === 'tool_result')) continue;
+    const message = toMessage(m);
+    const prev = out.at(-1);
+    if (m.role === 'assistant' && prev?.role === 'assistant') {
+      out[out.length - 1] = {
+        ...prev,
+        content: [prev.content, message.content].filter(Boolean).join('\n\n'),
+        ...(message.stopReason ? { stopReason: message.stopReason } : {}),
+      };
+    } else {
+      out.push(message);
+    }
+  }
+  return out;
+}
+
 /** In-memory store; SQLite (Drizzle) replaces the two maps in phase 3. */
 @Injectable()
 export class ConversationsService {
@@ -51,7 +74,7 @@ export class ConversationsService {
   }
 
   getWithMessages(id: string): ConversationWithMessages {
-    return { ...this.getOrThrow(id), messages: this.listMessages(id).map(toMessage) };
+    return { ...this.getOrThrow(id), messages: toMessages(this.listMessages(id)) };
   }
 
   remove(id: string): void {

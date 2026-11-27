@@ -2,19 +2,47 @@ import type { ChatEvent } from '@chatbot/shared';
 
 export const LLM_PROVIDER = Symbol('LLM_PROVIDER');
 
-/** A piece of a message. Tool blocks join this union in the tool-loop step. */
-export type ContentBlock = { type: 'text'; text: string };
+export interface ToolUseBlock {
+  type: 'tool_use';
+  id: string;
+  name: string;
+  input: unknown;
+}
+
+export interface ToolResultBlock {
+  type: 'tool_result';
+  toolUseId: string;
+  content: string;
+  isError: boolean;
+}
+
+/** A piece of a message. */
+export type ContentBlock = { type: 'text'; text: string } | ToolUseBlock | ToolResultBlock;
 
 export interface LlmMessage {
   role: 'user' | 'assistant';
   content: ContentBlock[];
 }
 
+/** A tool as the model sees it: name, description and the JSON schema of its input. */
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
+
 /** Our domain request shape. SDK mapping stays inside the provider that needs it. */
 export interface LlmRequest {
   messages: LlmMessage[];
+  tools?: ToolDefinition[];
 }
 
+/**
+ * What a provider streams: the chat events of one model response, except that a response
+ * ending in `tool_use` finishes with a `tool_use` event (the tool calls to run) instead of `message_done`.
+ */
+export type LlmEvent = Exclude<ChatEvent, { type: 'message_start' }> | { type: 'tool_use'; blocks: ToolUseBlock[] };
+
 export interface LlmProvider {
-  stream(request: LlmRequest, signal: AbortSignal): AsyncIterable<ChatEvent>;
+  stream(request: LlmRequest, signal: AbortSignal): AsyncIterable<LlmEvent>;
 }
